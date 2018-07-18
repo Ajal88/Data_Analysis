@@ -366,7 +366,7 @@ knitr::kable(selected_movie_rules, "html")
 
 <p dir="RTL">
 لینک تمارین:
-
+https://github.com/Ajal88/Data_Analysis
 </p>
 
 ***
