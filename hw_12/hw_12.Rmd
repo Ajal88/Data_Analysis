@@ -32,6 +32,7 @@ library(tidytext)
 library(arules)
 library(arulesViz)
 library(colorspace)
+library(ggplot2)
 
 movie = read_delim("../../Data/data_classification/ml-10M100K/movies.dat",
                    ":",
@@ -202,6 +203,14 @@ genre_movies = movie %>%
 
 genre_movies = melt(genre_movies)
 colnames(genre_movies) = c('genre', 'count')
+
+ggplot(data = genre_movies, aes(x = reorder(genre, count), y = count, fill = count)) + 
+  geom_bar(stat="identity") +
+  ggtitle("Number of Movies in each Genre") +
+  xlab("Genre") +
+  ylab("Count") +
+  coord_flip()
+
 ```
 
 <p dir="RTL">
@@ -377,9 +386,13 @@ https://github.com/Ajal88/Data_Analysis
 
 <p dir="RTL">
 ۱. رویکرد درس از قبل متفاوتتر شده بود و کمتر مهندسی بود به این مفهوم که امتحانات کاملا ریاضیوار برگذار شدند و کمتر اهمیت درک ما از نتایج مورد توجه بود و بیشتر محاسباتی مد نظر بود که در طول تمارین به آنها هرگز پرداخته نمیشد.
+<br>
 ۲. حجم تمارین و پروژه بیسابقه بود! :)
-۳. خیلی سختگیرانس ولی خب اسلاید هرچی جلوتر رفتیم کیفیتشون کمتر میشد.
+<br>
+۳. خیلی سختگیرانس ولی خب اسلاید هرچی جلوتر رفتیم کیفیتشون کمتر میشد
+<br>.
 ۴. تعداد دقیق برای انتقاد خوب نیست، شاید یکی ۶ تا انتقاد خوب داشت!
+<br>
 ۵. پنجتا انتقاد واقعا زیاده ندارم ...
 </p>
 
@@ -391,9 +404,13 @@ https://github.com/Ajal88/Data_Analysis
 
 <p dir="RTL">
 ۱. رویکرد مهندسی رو در این درس دوباره احیا کنید ...
+<br>
 ۲. تمارین رو اندکی کاهشدهید.
+<br>
 ۳. ارتباط استادیارها رو با دانشجوها بیشتر کنید و یکم فورسشون کنید اشکالات تمرینات بچهها رو زودتر بگن نه بعد از اینکه کلا تمرینات یک مبحث تموم میشه.
+<br>
 ۴. نمرهها رو خب زودتر بدید آدم بفهمه چند چنده ...
+<br>
 ۵. عدد دقیق کلا برای اینجور سوالا درست نیست به نظرم!
 </p>
 
@@ -405,7 +422,9 @@ https://github.com/Ajal88/Data_Analysis
 
 <p dir="RTL">
 ۱. یادگیری عمیق!
+<br>
 ۲. Омӯзиши тозагӣ
+<br>
 ۳. Fianarana lalina
 </p>
 
@@ -417,7 +436,9 @@ https://github.com/Ajal88/Data_Analysis
 
 <p dir="RTL">
 ۱. رمزارزها رو جای سهامها بیارید.
+<br>
 ۲. از دادههای تلفنهای همراه متصل به آنتنها برای یافتن شلوغیها و مسیر حرکت مردم روی نقشه.
+<br>
 ۳. انتخابات آمریکا
 </p>
 
@@ -429,7 +450,10 @@ https://github.com/Ajal88/Data_Analysis
 
 <p dir="RTL">
 ۱. بدون گل قطعا بهار نمیشه!
+<br>
 ۲. خیلی R
+<br>
 ۳. تلاش کنم و زیر بار تمرینها کمر خم نکنم که بعد از هر سختی آسانیست ...:)
+<br>
 ۴. آزمون فرض
 </p>
