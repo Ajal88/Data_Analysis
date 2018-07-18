@@ -1,0 +1,279 @@
+---
+title: "Sixth Week: Linear Models"
+subtitle: "House price prediction"
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/house.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده های قیمت منازل
+لطفا با سوالات زیر پاسخ دهید.
+</p>
+
+***
+<p dir="RTL">
+در سوالات این تمرین به دادهها و کتابخانههای زیر نیاز داریم.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+library(readr)
+library(psych)
+library(corrplot)
+library(car)
+library(mgcv) 
+
+dic_var = read_delim("../../Data/house/dictionnaire_variables.csv",delim = ";") 
+dic_nvx = read_csv("../../Data/house/dictionnaire_niveaux.csv",
+                   col_names = c("variable", "label", "Type")) %>% 
+  select(1:3) 
+house = read_csv("../../Data/house/train.csv")
+house_test = read_csv("../../Data/house/test.csv")
+```
+<p dir="RTL">
+۱. ماتریس همبستگی متغیرهای مختلف را به دست آورده و سپس رسم نمایید.
+اعداد به دست آمده را با آزمون فرض معناداری همبستگی بسنجید و سپس ده متغیری که همبستگی بالاتری با قیمت دارند را مشخص نمایید.
+</p>
+<p dir="RTL">
+جواب:
+در این تمرین من تمرکز را بر روی دادههای عددی قراردادهام و از دادههایی با مقادیر غیر عددی صرف نظرکردهام.
+برای بهتر شدن نمودار همبستگی تنها بخشی از دادهها را انتخاب کردهام تا شکل گویاتر باشد و ملاک انتخاب این متغیرها نیز همبستگی بیشتر آنها با قیمت بوده و آنهایی که همبستگی خطی نداشتند کنار گذاشتهشدهاند.
+در جداول به ترتیب ده متغیردارای بیشترین همبستگی و در ادامه همبستگی تمام متغیرهای عددی و پس از آن نمودار همبستگی متغیرهای منتخب و در آخر نیز نتایج آزمون فرض همبستگی مشاهده میشود.
+فرض صفر این آزمون نداشتن رابطهی خطی بین دو متغیر است.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+house_numeric = house[,sapply(house,is.numeric)] %>% 
+  select(-Id,-MSSubClass,-LotFrontage,-MasVnrArea,-GarageYrBlt,-MoSold,-YrSold,-PoolArea,-MiscVal,-`3SsnPorch`,-EnclosedPorch,-ScreenPorch,-KitchenAbvGr,-BsmtFinSF2,-LowQualFinSF,-BsmtHalfBath)
+hn = house[,sapply(house,is.numeric)]
+# selected param
+cor_hn = cor(house_numeric)
+# all param
+hnc = cor(hn)
+# max correlation
+knitr::kable(abs(sort(-abs(hnc['SalePrice',]))[2:11]))
+# all parameter correlation
+knitr::kable(hnc, "html")
+# selected param to plot
+corrplot(cor_hn, method = "square", type = "lower", tl.col = "black", tl.srt = 10)
+# cor.test all pairwise p-value
+knitr::kable(sort(corr.test(hn, adjust = "none")$p[38,]))
+```
+
+***
+
+<p dir="RTL">
+۲. در یک تصویر نمودار پراکنش دو به دو ده متغیر بدست آمده به همراه قیمت را رسم نمایید و هم خطی بودن متغیرها را بررسی کنید
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+top_ten_cor = hn %>% 
+  select(OverallQual,GrLivArea,GarageCars,GarageArea,TotalBsmtSF,`1stFlrSF`,FullBath,TotRmsAbvGrd,YearBuilt,YearRemodAdd,SalePrice)
+
+scatterplotMatrix(top_ten_cor, regLine = list(method=lm, lty=1, col="red") ,smooth=list(smoother=loessLine, spread=FALSE, lty.smooth=2, col.smooth="black"), col = "gray")
+```
+<p dir="RTL">
+جواب:
+در این سوال نمودار موردنظر در این تصویر مشاهده میشود و خط قرمز خط رگرسیون و خطچین سیاه نوع رفتار غیرخطی داده است که در نمودارهایی که رفتارهایی متفاوتی این دو دارند میتوان به غیرخطی بودن این متغیرها از روی نمودار صرفا پیبرد.
+</p>
+***
+
+<p dir="RTL">
+۳. یک مدل خطی بر اساس ده متغیر برای پیش بینی قیمت برازش دهید. و سپس خلاصه نتایج مدل را به دست آورید.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+rg_mdl <- lm(SalePrice~., data = top_ten_cor)
+summary(rg_mdl)
+```
+
+
+***
+
+<p dir="RTL">
+۴. نمودار قیمت واقعی و قیمت پیش بینی را رسم نمایید و خوب بودن مدل را ارزیابی کنید.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+pred_price = predict(rg_mdl)
+ggplot(hn, aes(x=hn$SalePrice,y= pred_price)) + geom_point() + geom_abline(slope = 1) + geom_smooth(method="lm", se=FALSE) 
+```
+<p dir="RTL">
+جواب:
+مدل دقت بدی ندارد و خطایی در حدود ۲۳ درصد را گزارش میدهد که در نمودار قیمت پیشبینیشده نسبت به قیمت اصلی مشاهده میشود و از خط 
+y = x
+فاصله دارد و به طور کلی مدل خوبی تلقی نمیشود.
+</p>
+***
+
+<p dir="RTL">
+۵. مقدار
+R-squared
+ مدل را به دست آورید. آیا بر اساس این کمیت مدل به خوبی به داده ها برازش داده شده است؟
+</p>
+<p dir="RTL">
+جواب:
+همانطور که در بالا توضیحدادهشد میتوان گفت مدل دقت مناسبی ندارد.
+</p>
+<p dir="RTL">
+ کمیت
+ F-statistic
+ را در خلاصه مدل تفسیر نمایید.
+</p>
+<p dir="RTL">
+جواب:
+این تست میزان بهتر بودن مدل موجود در مقایسه با مدل بدون پیشبینیکننده را بررسی میکند.
+این تست به طور کلی در مورد مدل فعلی با مدل فقط رگرسیونی ارزیابی انجاممیدهد و در مورد کافی بودن متغیرها اطلاعاتی در اختیار قرار میدهد.
+در این جا مقدار
+p-value
+بسیار کوچک بدست میآید که به معنی این است که متغیرهای موجود باعث بهبود عملکرد مدل از میانگین مقادیر شدهاست.
+درجه آزادی برابر ۱۴۴۹ و تعداد متغیرها ۱۰ و مقدار آن برابر ۴۹۵.۳۸ است.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+# R-squared
+summary(rg_mdl)$r.squared
+# F-statistic
+summary(rg_mdl)$fstatistic
+```
+
+***
+
+<p dir="RTL">
+۶. بر اساس
+p-value
+ سطح معناداری ضرایب تصمیم بگیرید که چه متغیرهایی در مدل سازی استفاده شود.
+بر اساس متغیرهای جدید دوباره مدل سازی کنید و نتایج رو گزارش دهید.
+</p>
+<p dir="RTL">
+جواب:
+متغیرهای 
+GarageArea, TotRmsAbvGrd
+کمترین تاثیر را در مدلسازی ما دارند آنها را حذف کرده و دوباره مدلسازی را انجام دادهام.
+ولی نتایج در ۸ متغیر باقی مانده بهبودی در را در مدلسازی نشان نمیدهد و خطا همچنان همانند قبل است.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+# R-squared
+sort(summary(rg_mdl)$coefficients[,'Pr(>|t|)'])
+# GarageArea, TotRmsAbvGrd
+
+top_ten_cor_2 <- top_ten_cor %>% 
+  select(-GarageArea, -TotRmsAbvGrd)
+rg_mdl_2 <- lm(SalePrice~., data = top_ten_cor_2)
+summary(rg_mdl_2)
+
+pred_price_2 = predict(rg_mdl_2)
+ggplot(hn, aes(x=hn$SalePrice,y= pred_price_2)) + geom_point() + geom_abline(slope = 1) + geom_smooth(method="lm", se=FALSE)
+```
+***
+
+<p dir="RTL">
+۷. مدل خود را بر اساس باقی مانده نقص یابی کنید.
+سه محک 
+normality, independance, Constant Variance
+ را در نقص یابی خود در نظر بگیرید.
+</p>
+<p dir="RTL">
+جواب:
+مقادیر باقیمانده توزیع خوبی حول صفر دارند.
+نمودار 
+Normal Q-Q 
+ نشان می دهد که فرض نرمال بودن به تقریب خوبی درست است و اکثریت این نقاط روی خط هستند.
+نمودار 
+Scale−Location 
+ هم نشان می دهد که حول یک خط افقی است و در نتیجه فرض ثابت بودن واریانس ها نیز با تقریب خوبی قابل برداشت است.
+ در مورد مستقل بودن منطقا نمیتوان برداشت درستی از نمودارها داشت و حرف دقیقی نمیتوان در این مورد زد.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+plot(residuals(rg_mdl_2))
+par(mfrow=c(2,2))
+plot(rg_mdl_2)
+par(mfrow=c(1,1))
+```
+
+
+***
+
+<p dir="RTL">
+۸. داده ها را به پنج قسمت تقسیم کنید. بر اساس چهار قسمت مدل خطی را بسازید و صحت مدل را برای یک قسمت 
+باقی مانده را تست کنید. خطای پیش بینی شما چقدر است؟
+</p>
+
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+sample = sample(1:length(top_ten_cor$SalePrice), size = length(top_ten_cor$SalePrice)*4/5)
+train = top_ten_cor[sample,]
+test = top_ten_cor[-sample,]
+coefficients = lm(SalePrice~., data = train)
+pred = predict(coefficients, test)
+ggplot(test, aes(x=test$SalePrice,y= pred)) + geom_point() + geom_abline(slope = 1) + geom_smooth(method="lm", se=FALSE) 
+summary(coefficients)
+```
+<p dir="RTL">
+جواب:
+مدل عملکرد مشابهی از خود نشانداد و این خود دال بر صحت عملکرد این مدل است.
+</p>
+***
+
+<p dir="RTL"> 
+۹. آیا قیمت ربط غیر خطی با یکی از ده متغیر استفاده شده دارد؟
+بر اساس دستاوردهای خود مدل را بهتر نمایید.
+</p>
+<p dir="RTL">
+جواب:
+با توجه به نمودارهای پراکنش این متغیرها، متغیر 
+TotalBsmtSF 
+ کمتر نزدیک به خط بود و با تغییر آن درصد خطا را نزدیک به دو درصد کاهش دادهایم.
+ این متغیر رفتاری نمایی داشته و با سعی و خطا مقدار مناسبی برای آن اتخاذکرده و مدل را بهبود دادیم.
+ در همین قسمت از 
+ glm
+  نیز بهرهگرفتهام که خود مدلی غیرخطی را بدست میاورد و دقتی بالاتر از مدل خطی ما در این داده ارائهداد که این خود دال بر غیر خطی بودن مدل این داده است.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+# with glm
+nlm = lm(SalePrice~OverallQual+GrLivArea+GarageCars+GarageArea+I(1.1^TotalBsmtSF)+`1stFlrSF`+FullBath+TotRmsAbvGrd+YearBuilt+YearRemodAdd, data = top_ten_cor)
+summary(nlm)
+pred_nlm = predict(nlm)
+ggplot(top_ten_cor, aes(x=top_ten_cor$SalePrice,y = pred_nlm)) + geom_point() + geom_abline(slope = 1) + geom_smooth(method="lm", se=FALSE) 
+
+# with gam - best fit
+g = gam(SalePrice~s(OverallQual)+s(GrLivArea)+s(GarageArea)+s(TotalBsmtSF)+s(TotRmsAbvGrd)+s(YearBuilt)+s(YearRemodAdd) , data=top_ten_cor)
+summary(g)
+pred_g = predict(g)
+ggplot(top_ten_cor, aes(x=top_ten_cor$SalePrice,y = pred_g)) + geom_point() + geom_abline(slope = 1) + geom_smooth(method="lm", se=FALSE) 
+
+```
+
+
+***
+
+<p dir="RTL"> 
+۱۰. بر اساس مدل نهایی به دست آمده نتایج پیش بینی خود را بر روی
+test.csv
+به دست آورید و در سایت 
+kaggle
+ در مسابقه 
+ House Prices: Advanced Regression Techniques
+بارگذاری نمایید. سپس لینک رتبه و عدد آن را ضمیمه تمرین کنید.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+pred_g = predict(g, house_test)
+house_test$SalePrice = pred_g
+res = house_test %>% select(Id, SalePrice) %>% 
+  mutate(SalePrice = ifelse(!is.na(SalePrice),SalePrice,mean(SalePrice, na.rm = TRUE)))
+write.csv(res, file = "../hw_06/res.csv",row.names=FALSE)
+```
+<p dir="RTL">
+جواب:
+رتبه : ۳۱۰۲
+<br>
+لینک : https://www.kaggle.com/c/house-prices-advanced-regression-techniques/leaderboard
+</p>
+

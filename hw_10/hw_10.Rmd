@@ -1,0 +1,535 @@
+---
+title: "Cluster Analysis"
+subtitle: "WDI Indicators"
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/best_hans_talks_1200x627.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده بانک جهانی به سوالات زیر پاسخ دهید. برای استفاده از داده از سه فایل زیر استفاده نمایید.
+داده نام کشورها: WDICountry
+داده نام سری های زمانی: WDISeries
+داده کل: WDIData
+در صورتی که داده را در اختیار ندارید می توانید از بسته WDI استفاده نموده و داده های مورد نظر را استخراج نمایید.
+</p>
+
+<p dir='RTL'>
+دادهها و کتابخانههای زیر در طول تمرین مورد استفاده قرارخواهندگرفت.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+
+wdi_data = read_csv('../../Data/WDI/WDIData.csv')
+```
+
+***
+
+<p dir="RTL">
+۱. ده کشور فقیر دنیا را بیابید. نمودار درآمد روزانه آنها را رسم کنید. چند درصد از اعضای این کشورها زیر خط فقر هستند؟ متوسط عمر در این کشورها چقدر است؟
+</p>
+
+<p dir="RTL">
+جواب:
+در این قسمت با توجه به موجود بودن دادهها دادهّها را استخراجکرده که در اینجا برای داشتن مقادیر خط فقر از سال ۲۰۱۴ استفادهکردم.
+نمودار فقیرترین ها نیز کشیدهشدهاست که حاصل درآمد متوسط آنها تقسیم تعداد روزهای سال است.
+مطلوبات سوال در جدولی کشیدهشدهاست.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+income = wdi_data %>% 
+  filter(`Indicator Code`== 'NY.ADJ.NNTY.CD') %>% 
+  select(country_name = `Country Name`, income = `2016`)
+
+poverty = wdi_data %>% 
+  filter(`Indicator Code`== 'NY.GDP.PCAP.PP.CD') %>% 
+  select(country_name = `Country Name`, poverty = `2016`)
+
+poverty_line = wdi_data %>% 
+  filter(`Indicator Code`== 'SI.POV.NAHC') %>% 
+  select(country_name = `Country Name`, poverty_line = `2014`)
+
+population = wdi_data %>% 
+  filter(`Indicator Code`== 'SP.POP.TOTL') %>% 
+  select(country_name = `Country Name`, population = `2016`)
+
+life_expectancy = wdi_data %>% 
+  filter(`Indicator Code`== 'SP.DYN.LE00.IN') %>% 
+  select(country_name = `Country Name`, life_expectancy = `2016`)
+
+poverty = merge(poverty,income)
+poverty = merge(poverty,population)
+poverty = merge(poverty,poverty_line)
+poverty = merge(poverty,life_expectancy)
+poverty = poverty %>% 
+  arrange(poverty) %>% 
+  slice(1:10) %>% 
+  mutate(daily_income = income/(365*population))
+
+ggplot(poverty, aes(x =reorder(country_name, daily_income), y = daily_income)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Poorest Country Daily Income") + 
+  xlab("Countries") +
+  ylab("Daily Income $") + 
+  coord_flip()
+
+knitr::kable(poverty,"html")
+```
+
+***
+
+<p dir="RTL">
+۲. تراژدی روآندا: بر اساس داده های امید به زندگی ابتدا نمودار سالانه نمودار جعبه ایی امید به زندگی کشورها را رسم نمایید(در یک نمودار!). سپس سری زمانی امید به زندگی روآندا را به آن اضافه کنید. چه می بینید؟ چند میلیون نفر کشته شدند؟
+</p>
+
+<p dir="RTL">
+جواب:
+باتوجه به دادهها و مشخصکردن روآندا روی نمودار این فاجعهی انسانی بر روی این نمودار مشخصشده است.
+مجموع دقیق این کشتهها مشخصشدهاست و حدود یک میلیون برآورد میشود که بسیار وحشتناک است.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(reshape2)
+
+life_expectancy = wdi_data %>% 
+  filter(`Indicator Code`== 'SP.DYN.LE00.IN') %>% 
+  select(country_name = `Country Name`, matches('\\d\\d\\d\\d'))
+
+le_long = melt(life_expectancy, id.vars=c('country_name'))
+
+rwanda = le_long %>% 
+  filter(country_name == 'Rwanda')
+
+ggplot(le_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() +
+  geom_line(data = rwanda,aes(x = variable, y = value, group = 1, color = 'Rwanda')) + 
+  ggtitle("Average Life Expectancy In Worldwide") + 
+  xlab("Life Expectancy") +
+  ylab("Year")
+
+rwanda_death = wdi_data %>% 
+  filter(`Indicator Code`== 'SP.DYN.CDRT.IN') %>% 
+  select(country_name = `Country Name`, matches('\\d\\d\\d\\d')) %>% 
+  filter(country_name == 'Rwanda')
+
+rd_long = melt(rwanda_death, id.vars=c('country_name'))
+death = rd_long %>% 
+  summarise(Death = sum(value, na.rm = TRUE)*1000)
+
+knitr::kable(death,"html")
+```
+
+***
+
+<p dir="RTL">
+۳. نمودار امید به زندگی و هزینه های بهداشتی را رسم کنید. چه نتیجه ایی می گیرید؟
+</p>
+
+<p dir="RTL">
+جواب:
+هرچه هزینههای درمانی افزا یشیافته، اهمیت سلامتی به نظر من و طول عمر به تبع از روی نمودار افزایش یافتهاست.
+</p>
+
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+life_expectancy = wdi_data %>% 
+  filter(`Indicator Code`== 'SP.DYN.LE00.IN') %>% 
+  select(country_name = `Country Name`, matches('\\d\\d\\d\\d'))
+
+le_long = melt(life_expectancy, id.vars=c('country_name'))
+le_long = le_long %>% 
+  select(country_name,variable,value) %>% 
+  mutate(ind = 'Life Expectancy')
+
+ggplot(le_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() + 
+  ggtitle("Average Life Expectancy In Worldwide") + 
+  xlab("Life Expectancy") +
+  ylab("Year")
+
+health_cost = wdi_data %>% 
+  filter(`Indicator Code`== 'SH.XPD.CHEX.PC.CD') %>% 
+  select(country_name = `Country Name`, matches('\\d\\d\\d\\d'))
+
+hc_long = melt(health_cost, id.vars=c('country_name'))
+hc_long = hc_long %>% 
+  select(country_name,variable,value) %>% 
+  mutate(ind = 'Health Cost')
+
+ggplot(hc_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() + 
+  ggtitle("Average Health Cost In Worldwide") + 
+  xlab("Health Cost") +
+  ylab("Year")
+
+hc_le = rbind(le_long, hc_long)
+
+ggplot(hc_le,aes(x = variable, y = value, col=ind, fill=ind)) +
+  geom_boxplot() +
+  coord_flip() + 
+  ggtitle("Average Health Cost & Life Expectancy In Worldwide") + 
+  xlab("HC & LE") +
+  ylab("Year")
+
+```
+
+
+***
+
+<p dir="RTL">
+۴. آیا قدرت خرید خانواده های ایرانی در ۵۰ سال اخیر افزایش یافته است؟ برای این کار از داده های اقتصادی خانوار استفاده کنید.
+</p>
+
+<p dir="RTL">
+جواب:
+باتوجه به دادههای موجود این مقدار افزایشیافته البته در مقطعی کاهش نیز مشاهدهمیشود ولی به طور کلی افزایش توان خرید را شاهد هستیم.
+البته بایستی تورم را نیز لحاظ کرد و این ارقام اطلاع دقیقی به ما نمیدهند.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+ppp = wdi_data %>% 
+  filter(`Indicator Code`== 'NY.GDP.PCAP.PP.CD') %>% 
+  select(country_name = `Country Name`,  matches('\\d\\d\\d\\d')) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+ppp_long = melt(ppp, id.vars=c('country_name'))
+
+ggplot(ppp_long, aes(x =variable, y = value)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Purchasing power parity in Iran") + 
+  xlab("Year") +
+  ylab("PPP $") + 
+  coord_flip()
+```
+
+***
+
+<p dir="RTL">
+۵. رشد اقتصادی ایران را با کشورهای دیگر در طول ۲۰ سال گذشته بر حسب بیست شاخص های اقتصادی مهم مانند تولید ناخالص ملی، تورم و … ارزیابی کنید! (برای هر شاخص از تصویرسازی استفاده کنید.)
+</p>
+
+<p dir="RTL">
+جواب:
+باتوجه به بیمقدار بودن اکثر متغیرها متغیرهای موجود در این حوزه را شناسایی و تصویرسازی کردهام.
+اسامی این شاخصها در لجند نمودارها موجودند.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+economic = wdi_data %>% 
+  filter(grepl('NE.EXP.GNFS.CD|NY.GDP.PCAP.CD|NY.GNP.MKTP.CD|NE.GDI.FTOT.KD.ZG|BX.KLT.DINV.CD.WD|BM.GSR.GNFS.CD|BN.GSR.FCTY.CD|FP.CPI.TOTL.ZG|FM.LBL.BMNY.GD.ZS|NV.AGR.TOTL.ZS|NE.CON.TETC.ZS|NE.CON.GOVT.ZS|NV.IND.MANF.ZS|MS.MIL.XPND.GD.ZS|TG.VAL.TOTL.GD.ZS|NY.GDP.TOTL.RT.ZS|NE.TRD.GNFS.ZS|FS.AST.DOMS.GD.ZS|NY.GNP.MKTP.PP.CD|SH.UHC.NOP1.TO', `Indicator Code`)) %>% 
+  select(country_name = `Country Name`, indicator_name = `Indicator Name`, matches('^199[6-9]|^20[0-1][0-9]'))
+
+ec_long = melt(economic, id.vars=c('country_name','indicator_name'))
+
+iran_ec = economic %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+ec_ir_long = melt(iran_ec, id.vars=c('country_name','indicator_name'))
+ec_ir_long = ec_ir_long %>% 
+  group_by(indicator_name)
+
+box_eco = ec_long %>%
+  group_by(indicator_name) %>% 
+  do(
+    plots = ggplot(.,aes(x = variable, y = value, color = indicator_name))+
+      geom_boxplot() +
+      coord_flip() +
+      geom_line(data = subset(.,country_name == 'Iran, Islamic Rep.'),aes(x = variable, y = value, group = 1, color = 'Iran, Islamic Rep.'))
+    )
+box_eco$plots
+```
+
+***
+
+<p dir="RTL">
+۶. در قسمت قبل با استفاده از روش خوشه بندی k-means داده ها را به سه دسته تقسیم کنید. ایران در کدام دسته می گنجد؟ (پیش از خوشه بندی طبیعتا داده را باید پاکسازی و استاندارد سازی نمایید.)
+</p>
+
+<p dir="RTL">
+جواب:
+ایران در دستهی سوم درکنار کشورهای درحال توسعه جای میگیرد.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+set.seed(17)
+eco_no_na = economic
+eco_no_na[is.na(eco_no_na)] = 0
+eco_no_na[,3:23] = scale(eco_no_na[,3:23])
+eco_no_na = eco_no_na %>% 
+  group_by(country_name) %>% 
+  filter(!grepl("income|Euro|Asia|only|total|members|dividend|World|America|Middle|Sub|Africa",country_name)) %>% 
+  summarise_all(mean)
+clusters = kmeans(eco_no_na[,3:23], 3)
+
+eco_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster = eco_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+knitr::kable(country_cluster,"html")
+str(clusters)
+```
+
+
+***
+
+<p dir="RTL">
+۷. به وسیله تحلیل مولفه اصلی بعد داده رو به دو کاهش دهید سپس خوشه های به دست آمده در قسمت قبل را بر روی آن نمایش دهید. آیا عملکرد روش خوشه بندی شما مطلوب بوده است؟
+</p>
+
+<p dir="RTL">
+جواب:
+نتیجهی یکسانی  بدستمیآید و میتوان خوشهبندی را معتبر دانست.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+eco_pca = prcomp(eco_no_na[,3:23], scale. = TRUE)
+x = eco_pca$x[,1:2]
+eco_no_na = bind_cols(eco_no_na,as.data.frame(x))
+
+clusters = kmeans(eco_no_na[,26:27], 3)
+
+eco_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster_pca_e = eco_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+knitr::kable(country_cluster_pca_e,"html")
+```
+
+<p dir="RTL">
+۸. با استفاده از داده روشی برای پیش بینی رشد اقتصادی ایران در سال آینده ارائه دهید.
+</p>
+
+<p dir="RTL">
+جواب:
+از رگرسیون خطی بهرهبردهام که سال آخر را با توجه به سالهای قبل از آن مدلسازی کند که دقت متوسطی دارد و وابستگی زیادی بین سالها مشاهدهمیشود که این مدلسازی را تایید میکند.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+eco_lm = economic
+eco_lm[is.na(eco_lm)] = 0
+
+lm_eco = lm(data = eco_lm[,4:23], formula = `2016`~.)
+summary(lm_eco)
+```
+***
+
+<p dir="RTL"> 
+۹. سوالهای ۵ تا ۷ را ابتدا برای ۲۰ شاخص سلامت سپس بر حسب ۲۰ شاخص آموزشی تکرار کنید.
+</p>
+
+<p dir="RTL">
+جواب:
+این عملیات را دقیقا به همان صورت برای این دونوع داده پیاده کردهام و صرفا دادههایی موجود مرتبط با هر قسمت را شناسایی و رسم کردهام.
+نتایج دستهبندی نیز همانند قبل است و در زیر مشاهدهاست و باز ایران در کنار کشورهای درحال توسعه قرار میگیرد.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+#Health
+health = wdi_data %>% 
+  filter(grepl('SH.DYN.AIDS.FE.ZS|SH.DYN.AIDS.ZS|SH.HIV.1524.MA.ZS|SH.HIV.1524.FE.ZS|SH.ANM.ALLW.ZS|SH.PRG.ANEM|SH.ANM.NPRG.ZS|SH.ANM.CHLD.ZS|SH.DTH.MORT|SH.DTH.IMRT|SH.VAC.TTNS.ZS|SH.DYN.MORT|SH.DYN.NMRT|SH.STA.MMRT|SH.MMR.RISK.ZS|SH.XPD.GHED.PP.CD|SH.XPD.GHED.PC.CD|SH.XPD.CHEX.PC.CD|SH.HIV.INCD|SH.HIV.0014', `Indicator Code`)) %>% 
+  select(country_name = `Country Name`, indicator_name = `Indicator Name`, matches('^199[6-9]|^20[0-1][0-9]'))
+
+hlth_long = melt(health, id.vars=c('country_name','indicator_name'))
+
+iran_hlth = health %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+hlth_ir_long = melt(iran_hlth, id.vars=c('country_name','indicator_name'))
+hlth_ir_long = hlth_ir_long %>% 
+  group_by(indicator_name)
+
+box_hlth = hlth_long %>%
+  group_by(indicator_name) %>% 
+  do(
+    plots = ggplot(.,aes(x = variable, y = value, color = indicator_name))+
+      geom_boxplot() +
+      coord_flip() +
+      geom_line(data = subset(.,country_name == 'Iran, Islamic Rep.'),aes(x = variable, y = value, group = 1, color = 'Iran, Islamic Rep.'))
+    )
+box_hlth$plots
+
+set.seed(45)
+hlth_no_na = health
+hlth_no_na[is.na(hlth_no_na)] = 0
+hlth_no_na[,3:23] = scale(hlth_no_na[,3:23])
+hlth_no_na = hlth_no_na %>% 
+  group_by(country_name) %>% 
+  filter(!grepl("income|Euro|Asia|only|total|members|dividend|World|America|Middle|Sub|Africa",country_name)) %>% 
+  summarise_all(mean)
+clusters = kmeans(hlth_no_na[,3:23], 3)
+
+hlth_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster = hlth_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+knitr::kable(country_cluster,"html")
+str(clusters)
+
+hlth_pca = prcomp(hlth_no_na[,3:23], scale. = TRUE)
+x = hlth_pca$x[,1:2]
+hlth_no_na = bind_cols(hlth_no_na,as.data.frame(x))
+
+clusters = kmeans(hlth_no_na[,26:27], 3)
+
+hlth_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster_pca_h = hlth_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+knitr::kable(country_cluster_pca_h,"html")
+
+#Education
+education = wdi_data %>% 
+  filter(grepl('SE.ENR.PRIM.FM.ZS|SE.PRM.DURS|SE.XPD.TERT.ZS|SE.XPD.PRIM.Z|SE.XPD.SECO.ZS|SE.PRM.ENRR|SE.PRM.TCHR|SE.PRM.ENRL|SE.PRE.ENRL.TC.ZS|SE.PRE.ENRR|SE.SEC.PROG.ZS|SE.SEC.ENRL.GC|SE.PRM.PRSL.ZS|SE.SEC.AGES|SE.PRE.ENRL.TC.ZS|SE.PRM.TENR.FE|SE.SEC.ENRL|SE.PRM.NENR|SE.SEC.DURS|SE.PRM.AGES', `Indicator Code`)) %>% 
+  select(country_name = `Country Name`, indicator_name = `Indicator Name`, matches('^199[6-9]|^20[0-1][0-9]'))
+
+edu_long = melt(education, id.vars=c('country_name','indicator_name'))
+
+iran_edu = education %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+edu_ir_long = melt(iran_edu, id.vars=c('country_name','indicator_name'))
+edu_ir_long = edu_ir_long %>% 
+  group_by(indicator_name)
+
+box_edu = edu_long %>%
+  group_by(indicator_name) %>% 
+  do(
+    plots = ggplot(.,aes(x = variable, y = value, color = indicator_name))+
+      geom_boxplot() +
+      coord_flip() +
+      geom_line(data = subset(.,country_name == 'Iran, Islamic Rep.'),aes(x = variable, y = value, group = 1, color = 'Iran, Islamic Rep.'))
+    )
+box_edu$plots
+
+set.seed(59)
+edu_no_na = education
+edu_no_na[is.na(edu_no_na)] = 0
+edu_no_na[,3:23] = scale(edu_no_na[,3:23])
+edu_no_na = edu_no_na %>% 
+  group_by(country_name) %>% 
+  filter(!grepl("income|Euro|Asia|only|total|members|dividend|World|America|Middle|Sub|Africa",country_name)) %>% 
+  summarise_all(mean)
+clusters = kmeans(edu_no_na[,3:23], 3)
+
+edu_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster = edu_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+knitr::kable(country_cluster,"html")
+str(clusters)
+
+edu_pca = prcomp(hlth_no_na[,3:23], scale. = TRUE)
+x = edu_pca$x[,1:2]
+edu_no_na = bind_cols(edu_no_na,as.data.frame(x))
+
+clusters = kmeans(edu_no_na[,26:27], 3)
+
+edu_no_na$cluster = as.integer(clusters$cluster)
+
+country_cluster_pca_edu = edu_no_na %>% 
+  select(country_name, cluster) %>% 
+  filter(country_name == 'Iran, Islamic Rep.')
+
+knitr::kable(country_cluster_pca_edu,"html")
+```
+
+
+***
+
+<p dir="RTL"> 
+۱۰. کشورهای دنیا را بر حسب ۶۰ شاخص اقتصادی، سلامت و آموزش با روش سلسله مراتبی خوشه بندی کرده و دندروگرام آن را رسم نمایید. اگر داده ها بر سه دسته تقسیم شوند ایران در کدام دسته می گنجد؟
+</p>
+
+<p dir="RTL">
+جواب:
+ایران در دستهی دوم همانند نتایج قبل در کنار کشورهای درحال توسعهقرار میگیرد.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+ehe = bind_cols(eco_no_na,edu_no_na,hlth_no_na)
+rownames(ehe) = ehe$country_name
+ehe = ehe %>% 
+  select(-indicator_name,-indicator_name1,-indicator_name2,-country_name1,-country_name2, -cluster,-cluster1,-cluster2,-PC1,-PC2,-PC11,-PC12,-PC21,-PC22,-country_name)
+
+dist_ehe = dist(ehe, method = "euclidean")
+clus_ehe = hclust(dist_ehe,method = "complete")
+hcut_ehe = cutree(clus_ehe,k=3)
+hcut_ehe['Iran, Islamic Rep.']
+
+library(ape)
+plot(as.phylo(clus_ehe), type = "fan", cex = 0.3,label.offset = 0)
+```
+
+***
+
+<p dir="RTL"> 
+۱۱. سه یافته جالب از داده ها استخراج کنید.
+</p>
+
+<p dir="RTL"> 
+۱۱.۱. کمترین امید به زندگی
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+cambodia = le_long %>% 
+  filter(country_name == 'Cambodia')
+
+ggplot(le_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() +
+  geom_line(data = cambodia,aes(x = variable, y = value, group = 1, color = 'Cambodia')) + 
+  ggtitle("Average Life Expectancy In Worldwide") + 
+  xlab("Life Expectancy") +
+  ylab("Year")
+```
+<p dir="RTL"> 
+۱۱.۲. کمترین امید به زندگی در سالهای اخیر
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+sierra_leone = le_long %>% 
+  filter(country_name == 'Sierra Leone')
+
+ggplot(le_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() +
+  geom_line(data = sierra_leone,aes(x = variable, y = value, group = 1, color = 'Sierra_Leone')) + 
+  ggtitle("Average Life Expectancy In Worldwide") + 
+  xlab("Life Expectancy") +
+  ylab("Year")
+```
+
+<p dir="RTL"> 
+۱۱.۳. بیشترین امید به زندگی
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+hong_kong = le_long %>% 
+  filter(country_name == 'Hong Kong SAR, China')
+
+ggplot(le_long,aes(x = variable, y = value)) +
+  geom_boxplot() +
+  coord_flip() +
+  geom_line(data = hong_kong,aes(x = variable, y = value, group = 1, color = 'Hong_Kong')) + 
+  ggtitle("Average Life Expectancy In Worldwide") + 
+  xlab("Life Expectancy") +
+  ylab("Year")
+```

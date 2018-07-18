@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1525032728846.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "A364E20D",
+    "lastKnownWriteTime" : 1525062356,
+    "last_content_update" : 1525062356806,
+    "path" : "~/Desktop/Mina/Learn/Data Analysis/Data_Analysis_HW/hw_08/codes/A2.R",
+    "project_path" : "codes/A2.R",
+    "properties" : {
+        "cursorPosition" : "5,0",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1525030513655.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "5CF30194",
+    "lastKnownWriteTime" : 1525032714,
+    "last_content_update" : 1525067288612,
+    "path" : "~/Desktop/Mina/Learn/Data Analysis/Data_Analysis_HW/hw_08/hw_08.Rmd",
+    "project_path" : "hw_08.Rmd",
+    "properties" : {
+        "cursorPosition" : "29,0",
+        "scrollLine" : "14"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

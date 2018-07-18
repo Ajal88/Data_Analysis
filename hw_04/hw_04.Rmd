@@ -1,0 +1,415 @@
+---
+title: "Fourth Week: Hypothesis Testing"
+subtitle: "TIMSS Analysis"
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/math.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری چهارم: چقدر ریاضی بلدیم و چرا؟
+</h1>
+
+<p dir="RTL"> لطفا مقاله زیر را مطالعه بفرمایید. </p>
+<p dir="RTL">
+[چرایی رتبه ضعیف ایران در آزمون تیمز](https://goo.gl/gX8DZc)
+</p>
+
+> <p dir="RTL"> 
+با استفاده از داده های ارزیابی تیمز ۲۰۱۵ ادعاهای زیر را مورد ارزیابی قراردهید.
+برای هر سوال علاوه بر استدلال آماری که در غالب آزمون فرض تعریف می شود از تصویرسازی مناسب باهر دو ابزار
+ggplot2
+و
+highcharter
+استفاده نمایید.
+به دلخواه به هفت گزاره از موارد زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+در این تمرین از دادههای زیر استفاده میکنیم و در ابتدا آنها را بارگذاری میکنیم.
+</p>
+
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+library(dplyr)
+library(highcharter)
+library(ggplot2)
+library(readr)
+
+bcg = read_rds("../../Data/timss_2015/data/bcg.rds") # school background
+bsg = read_rds("../../Data/timss_2015/data/bsg.rds") # student background
+btm = read_rds("../../Data/timss_2015/data/btm.rds") # Teacher background
+bsa = read_rds("../../Data/timss_2015/data/bsa.rds") # student result
+bst = read_rds("../../Data/timss_2015/data/bst.rds") # student-teacher linkage
+bsr = read_rds("../../Data/timss_2015/data/bsr.rds") # within-country
+
+```
+
+***
+
+<p dir="RTL">
+۱. میران رضایت معلمان در پیشرفت تحصیلی دانش آموزان موثر است.
+</p>
+
+***
+
+<p dir="RTL">
+۲. والدینی که تحصیلات بیشتری دارند دارای فرزندان موفق تری می باشند.
+<br>
+جواب: طبق نتیجهی بدستآمده از
+t.test
+میتوان نتیجه گرفت که این دو توضیع بایکدیگر متفاوت هستند و دانشآموزانی که والدین تحصیلکرده دارند عملکرد بهتری از خود نشانمیدهند.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idstud, idschool, idcntry, p_edu = bsdgedup, contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:13])) %>% 
+  arrange(p_edu) %>% 
+  select(idstud, idschool, idcntry, p_edu, score_avg) %>% 
+  filter(p_edu != 6) %>% 
+  mutate(p_edu = ifelse(p_edu < 2, 1, 0)) -> pedu_stscore
+
+st_edu <- pedu_stscore %>% 
+  filter(p_edu == 1)
+st_non <- pedu_stscore %>% 
+  filter(p_edu == 0)
+
+t.test(score_avg ~ p_edu, data = pedu_stscore , alt = "less")
+
+ggplot(pedu_stscore, aes(x = as.character(p_edu), y = score_avg)) +
+  geom_boxplot(outlier.colour="darkblue", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Parents have Educational Degree") + 
+  ylab("Average Score") + 
+  ggtitle("Parents Education Effect on Student's Score")
+
+hchart(density(st_edu$score), name=list("Parents have Educational Degree")) %>%
+  hc_add_series(density(st_non$score), name=list("Parents haven't Educational Degree"))
+
+```
+
+***
+
+<p dir="RTL">
+۳. امکانات رفاهی در خانه موجب پیشرفت تحصیلی می گردد.
+<br>
+در این سوال از تست یک طرفهی 
+ANOVA
+بهرهبردهایم و با توجه به نتیجهی بدست آمده گزارهی فوق رد نخواهدشد و طبق تصویرسازی میانگین بالاتری در سطح امتیاز دانشآموزان با امکانات مشاهده میشود.
+پس باتوجه به تست برابری ردشده و تفاوت در عملکرد این سه دسته وجود دارد.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idstud, idschool, idcntry, h_rs = bsdgher, contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:13])) %>% 
+  select(idstud, idschool, idcntry, h_rs, score_avg) %>% 
+  filter(!is.na(h_rs))-> rs_score
+
+aov(score_avg~h_rs, data = rs_score) -> out
+summary(out)
+
+ggplot(rs_score, aes(x = as.character(h_rs), y = score_avg)) +
+  geom_boxplot(outlier.colour="purple", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Home Resources (1 is greatest)") + 
+  ylab("Average Student Score") + 
+  ggtitle("Home Resources Effect on Student's Score")
+
+hchart(density(filter(rs_score, h_rs == 1)$score_avg), name=list("Many Resources")) %>%
+  hc_add_series(density(filter(rs_score, h_rs == 2)$score_avg), name=list("Some Resources")) %>%
+  hc_add_series(density(filter(rs_score, h_rs == 3)$score_avg), name=list("Few Resources"))
+
+```
+
+
+***
+
+<p dir="RTL">
+۴. محیط آرام مدرسه نقش مهمی در پیشرفت تحصیلی دارد.
+</p>
+
+***
+
+<p dir="RTL">
+۵. معلمان با تحصیلات  بالاتر یا تجربه بیشتر دانش آموزان موفق تری تربیت می کنند.
+<br>
+جواب: طبق نتایج بدستآمده از آزمون
+t.test
+معلمانی که تحصیلات دانشگاهی دارند دانشآموزان قویتری را پرورش میدهند.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bst %>% 
+  select(idschool, idcntry, idteach, idstud, contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:13])) %>% 
+  select(idschool, idcntry, idteach, idstud, score_avg) -> st_stat
+  
+
+btm %>% 
+  select(idschool, idcntry, idteach, t_edu = btbg04) %>% 
+  filter(!is.na(t_edu)) -> t_stat
+
+t_st <- merge(t_stat, st_stat)
+
+t_st %>%  
+  mutate(t_edu = ifelse(t_edu > 4, 1, 0)) -> t_st_2lvl
+  
+t.test(score_avg ~ t_edu, data = t_st_2lvl, alt = "less")
+
+ggplot(t_st, aes(x = as.character(t_edu), y = score_avg)) +
+  geom_boxplot(outlier.colour="darkred", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Teachers Educational Degree") + 
+  ylab("Average Student Score") + 
+  ggtitle("Teachers Education Effect on Student's Score")
+
+hchart(density(filter(t_st, t_edu == 1)$score_avg), name=list("Did not complete Upper secondary")) %>%
+  hc_add_series(density(filter(t_st, t_edu == 2)$score_avg), name=list("Upper secondary")) %>% 
+  hc_add_series(density(filter(t_st, t_edu == 3)$score_avg), name=list("Post-secondary, non-tertiary")) %>% 
+  hc_add_series(density(filter(t_st, t_edu == 4)$score_avg), name=list("Short-cycle tertiary")) %>% 
+  hc_add_series(density(filter(t_st, t_edu == 5)$score_avg), name=list("Bachelor’s or equivalent")) %>% 
+  hc_add_series(density(filter(t_st, t_edu == 6)$score_avg), name=list("Master’s or equivalent")) %>% 
+  hc_add_series(density(filter(t_st, t_edu == 7)$score_avg), name=list("Doctor or equivalent"))
+```
+
+***
+
+<p dir="RTL"> 
+۶. پسران در کاربرد هندسه قوی تر هستند.
+<br>
+جواب: در این سوال از 
+t.test
+ استفادهشدهاست که بیشتربودن میانگین پسرها را مورد بررسی قرارمیدهد و نتیجه دال بر ناصحیح بودن این گذاره است و طبق تصویرسازی تقریبا عملکرد مشابهی دارند.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idschool, idcntry, idstud, itsex, contains("bsmgeo")) %>%
+  mutate(score_avg = rowMeans(.[, 5:9])) %>% 
+  select(idschool, idcntry, idstud, itsex, score_avg) -> geo_sex
+
+t.test(score_avg ~ itsex, data = geo_sex, alt = "greater")
+
+ggplot(geo_sex, aes(x = as.character(itsex), y = score_avg)) +
+  geom_boxplot(outlier.colour="darkgreen", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Sex") + 
+  ylab("Geometry Average Score") + 
+  ggtitle("Sex Effects on Geometry Result")
+
+hchart(density(filter(geo_sex, itsex == 1)$score_avg), name=list("Female")) %>%
+  hc_add_series(density(filter(geo_sex, itsex == 2)$score_avg), name=list("Male"))
+
+```
+
+***
+
+<p dir="RTL"> 
+۷. تغذیه دانش آموزان نقش اساسی در یادگیری آنها دارد. 
+<br>
+جواب: اطلاع از وضعیت تغذیه را از میزان خوردن صبحانه ارزیابیشده است و از آزمون 
+t.test
+برای ارزیابی این دو گروه استفادهشدهاست.
+کسانی که غالبن صبحانه میخورند در یک گروه و کسانی که کمتر صبحانه میخورند در گروه دیگر قراردارند و طبق نتیجهی بدستآمده از تست کسانی که صبحانه میخورند امتیاز بالاتری کسب میکردهاند.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idschool, idcntry, idstud, bsbg12 , contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:14])) %>% 
+  select(idschool, idcntry, idstud, bsbg12, score_avg) -> breakfast_score
+
+breakfast_score %>% 
+  mutate(food = ifelse(bsbg12< 3, 1 , 0)) %>% 
+  select(idschool, idcntry, idstud, food, score_avg) %>% 
+  filter(!is.na(food))-> food_score
+
+t.test(score_avg ~ food, data = food_score, alt = "less")
+
+ggplot(food_score, aes(x = as.character(food), y = score_avg)) +
+  geom_boxplot(outlier.colour="khaki", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Eat Breakfast") + 
+  ylab("Average Score") + 
+  ggtitle("Breakfast Effect on Score")
+
+hchart(density(filter(food_score, food == 0)$score_avg), name=list("Doesn't Eat Breakfast")) %>%
+  hc_add_series(density(filter(food_score, food == 1)$score_avg), name=list("Eat Breakfast"))
+```
+
+***
+
+<p dir="RTL"> 
+۸. مدارس با امکانات بیشتر دارای عملکرد بهتری می باشند.
+<br>
+جواب: در این سوال از آزمون 
+ANOVA
+ استفادهشدهاست که بنا به نتیجه گذارهی فوق ردشده و طبق تصویرسازیها مدارسی که امکانات بیشتری داشتند به طور میانگین نمرات کمتری کسب نمودهاند.
+</p>
+
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idschool, idcntry, contains("bsmmat"), contains("bsssci")) %>%
+  mutate(score_avg = rowMeans(.[, 3:12])) %>% 
+  group_by(idschool, idcntry) %>% 
+  summarise(score_avg_sc = mean(score_avg)) %>% 
+  select(idschool, idcntry, score_avg_sc) -> sc_score
+
+bcg %>% 
+  select(idschool, idcntry, contains("bcbg13")) %>%
+  mutate(rs_avg = ceiling(rowMeans(.[, 3:21]))) %>% 
+  select(idschool, idcntry, rs_avg) -> rs_sc
+
+rs_sc_score <- merge(rs_sc, sc_score) %>% 
+  filter(!is.na(rs_avg))
+
+summary(aov(score_avg_sc ~ rs_avg, data = rs_sc_score))
+
+ggplot(rs_sc_score, aes(x = as.character(rs_avg), y = score_avg_sc)) +
+  geom_boxplot(outlier.colour="brown", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("School Resources (higher has more resources)") + 
+  ylab("Average Score") + 
+  ggtitle("Home Resources Effect on Average Student's Score in Schools")
+
+hchart(density(filter(rs_sc_score, rs_avg == 1)$score_avg), name=list("Not at all")) %>%
+  hc_add_series(density(filter(rs_sc_score, rs_avg == 2)$score_avg), name=list("A little")) %>% 
+  hc_add_series(density(filter(rs_sc_score, rs_avg == 3)$score_avg), name=list("Some")) %>% 
+  hc_add_series(density(filter(rs_sc_score, rs_avg == 4)$score_avg), name=list("A lot"))
+
+```
+
+
+***
+
+<p dir="RTL"> 
+۹. علت افت تحصیلی عدم مشارکت در کلاس است.
+<br>
+در این سوال 
+cor.test
+مورد ارزیابی قرارگرفتهاست بین حضور حداکثری و حداقلی در کلاس که نتیجه تاثیر منفی غیبت در کلاس در نتیجهی آزمون است.
+در تصویرسازیها از چهار دستهبندی میزان حضور در کلاس استفادهشده است.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idschool, idcntry, idstud, bsbg11 , contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:14])) %>% 
+  select(idschool, idcntry, idstud, bsbg11, score_avg) %>% 
+  filter(!is.na(bsbg11))-> absent_score
+
+absent_score %>% 
+  mutate(absence = ifelse(bsbg11< 3, 1 , 0)) %>% 
+  select(idschool, idcntry, idstud, absence, score_avg) -> absent_score_lvl2
+
+cor.test(absent_score_lvl2$score_avg , absent_score_lvl2$absence, alternative = "less")
+
+ggplot(absent_score, aes(x = as.character(bsbg11), y = score_avg)) +
+  geom_boxplot(outlier.colour="darkgray", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Absence Grade (1 means often to 4 that means never)") + 
+  ylab("Average Score") + 
+  ggtitle("Absence Effect on Score")
+
+hchart(density(filter(absent_score, bsbg11 == 1)$score_avg), name=list("Once a week or more")) %>%
+  hc_add_series(density(filter(absent_score, bsbg11 == 2)$score_avg), name=list("Once every two weeks")) %>% 
+  hc_add_series(density(filter(absent_score, bsbg11 == 3)$score_avg), name=list("Once a month")) %>% 
+  hc_add_series(density(filter(absent_score, bsbg11 == 4)$score_avg), name=list("Never or almost never"))
+```
+
+***
+
+<p dir="RTL"> 
+۱۰. دانش آموزان ایرانی در استدلال قوی تر از کاربرد هستند.
+</p>
+
+***
+
+<p dir="RTL">
+سه گزاره جالب کشف کنید و ادعای خود را ثابت نمایید.
+</p>
+***
+<p dir="RTL">
+۱. دانشآموزانی که کنسول بازی دارند موفقتر نیستند.
+<br>
+جواب: با توجه به نتیجهی آزمون 
+t.test
+این گذاره رد خواهد شد و با توجه به تصویرسازیها کسانی که دستگاه بازی دارند موفقترند.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idstud, idschool, idcntry, g_s = bsbg06g, contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:13])) %>% 
+  select(idstud, idschool, idcntry, g_s, score_avg) %>% 
+  filter(!is.na(g_s))-> gs_score
+
+t.test(score_avg ~ g_s, data = gs_score, alt = "greater")
+
+ggplot(gs_score, aes(x = as.character(g_s), y = score_avg)) +
+  geom_boxplot(outlier.colour="blue", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Have Game System (1: Yes, 2: No)") + 
+  ylab("Average Student Score") + 
+  ggtitle("Game System Effect on Student's Score")
+
+hchart(density(filter(gs_score, g_s == 2)$score_avg), name=list("Doesn't Have Game System")) %>%
+  hc_add_series(density(filter(gs_score, g_s == 1)$score_avg), name=list("Has Game System"))
+```
+
+***
+<p dir="RTL">
+۲. دانشآموزانی که گوشی موبایل شخصی ندارند موفقتر نیستند.
+<br>
+جواب: با توجه به نتیجهی آزمون 
+t.test
+دانشآموزانی که تلفن همراه شخصیدارند موفقتر هستند و فرض سوال رد میشود.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idstud, idschool, idcntry, sm = bsbg06f, contains("bsmmat"), contains("bsssci")) %>% 
+  mutate(score_avg = rowMeans(.[, 5:13])) %>% 
+  select(idstud, idschool, idcntry, sm, score_avg) %>% 
+  filter(!is.na(sm))-> sm_score
+
+t.test(score_avg ~ sm, data = sm_score, alt = "greater")
+
+ggplot(sm_score, aes(x = as.character(sm), y = score_avg)) +
+  geom_boxplot(outlier.colour="red", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Have Own Mobile (1: Yes, 2: No)") + 
+  ylab("Average Student Score") + 
+  ggtitle("Own Mobile Effect on Student's Score")
+
+hchart(density(filter(sm_score, sm == 2)$score_avg), name=list("Doesn't Have Own Mobile")) %>%
+  hc_add_series(density(filter(sm_score, sm == 1)$score_avg), name=list("Has Own Mobile"))
+```
+***
+<p dir="RTL">
+۳. علاقه به مدرسه با نتیجهی دانشآموز در امتحان رابطه دارد
+<br>
+جواب: با توجه به نتیجهی آزمون 
+ANOVA
+دانشاموزان به نسبت میزان علاقهای که به رفتن به مدرسه نشان میدهند تا میزان علاقه به دیدن دوستانشان به صورت میانگین از نتایج بهتری برخوردارند و فرض برابری این دستهها که از ۱ که به معنی علاقهمندترین است تا ۴ رد میشود.
+</p>
+```{r , message = FALSE, comment = NA, warning = FALSE}
+bsg %>% 
+  select(idstud, idschool, idcntry, contains("bsmmat"), contains("bsssci"), contains("bsbg15")) %>% 
+  mutate(score_avg = rowMeans(.[, 4:13]), lv_sc = floor(rowMeans(.[, 14:20]))) %>% 
+  select(idstud, idschool, idcntry, score_avg, lv_sc) %>% 
+  filter(!is.na(lv_sc)) -> sl_score
+
+summary(aov(score_avg ~ lv_sc, data = sl_score))
+
+ggplot(sl_score, aes(x = as.character(lv_sc), y = score_avg)) +
+  geom_boxplot(outlier.colour="blue", outlier.shape=16, outlier.size=2, notch=FALSE) + 
+  xlab("Like School (lower is better)") + 
+  ylab("Average Student Score") + 
+  ggtitle("School Environment Effect on Student's Score")
+
+hchart(density(filter(sl_score, lv_sc == 1)$score_avg), name=list("Agree a lot")) %>%
+  hc_add_series(density(filter(sl_score, lv_sc == 2)$score_avg), name=list("Agree a little")) %>% 
+    hc_add_series(density(filter(sl_score, lv_sc == 3)$score_avg), name=list("Disagree a little")) %>% 
+    hc_add_series(density(filter(sl_score, lv_sc == 4)$score_avg), name=list("Disagree a lot"))
+
+```

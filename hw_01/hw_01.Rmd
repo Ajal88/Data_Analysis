@@ -1,0 +1,319 @@
+---
+title: "first week: Introduction to R and Rstudio"
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/Rman.jpeg"  align = 'center'>
+</div>
+
+
+<h1 dir="RTL"> 
+تمرین سری اول: چند مساله
+</h1>
+
+<p dir="RTL"> 
+به سوال های زیر را از طریق نوشتن یک کد پاسخ دهید.
+</p>
+
+***
+
+<h2 dir="RTL">
+ماتریس دوستانه
+</h2>
+
+<p dir="RTL">
+یک ماتریس
+$(n,n)$
+که شامل اعداد 
+$1,2,...,n^2$
+است. دوستانه نامیده میشود اگر مجموع سطرها با مجموع ستون های آن برابر شوند. مثال هایی از ماتریس های دوستانه از بعد ۴و۵و۶ ارایه دهید. 
+</p>
+
+```{r}
+
+library(magic)
+
+# Example for 4*4 matrix
+m4 = magic(4)
+print(m4)
+
+# Example for 5*5 matrix
+m5 = magic(5)
+print(m5)
+
+# Example for 6*6 matrix
+m6 = magic(6)
+print(m6)
+
+```
+
+
+***
+
+<h2 dir="RTL">
+جایشگت  عجیب
+</h2>
+
+<p dir="RTL">
+جایگشت هایی از اعداد ۱ تا ۱۳ را پیدا کنید که در شرایط زیر صدق کنند:
+</p>
+
+$$ a = (a_1, a_2,..., a_{13})$$
+$$\frac{a_1}{a_2+a_3} = \frac{a_2+a_3}{a_3+a_4+a_5}<1$$
+$$\frac{a_6}{a_6+a_7}= \frac{a_6+a_7}{a_7+a_8+a_9} = \frac{a_7+a_8+a_9}{a_5+a_9+a_{10}} <1$$
+
+$$\frac{a_{11}+a_{12}}{a_{12}+a_{13}}=\frac{a_{12}+a_{13}}{a_{13}+a_{10}}<1$$
+
+```{r}
+library(gtools)
+library(combinat)
+
+all_5 = permutations(n = 13, r = 5, v = 1:13)
+find = FALSE
+index = 1
+a = all_5[index,]
+ans = matrix(ncol = 5)
+
+while(!find) {
+  if((a[1] < a[2] + a[3]) & (a[1] < a[3] + a[4] + a[5]) & (a[2] < a[4] + a[5])){
+    if((a[2]+a[3])^2 == a[1]*(a[3] + a[4] + a[5])){
+      ans = rbind(ans, a)
+    }
+  }
+  index = index + 1
+  if(index == (length(all_5)/5+1)){
+    find = TRUE
+  }
+  else{
+    a = all_5[index,]
+  }
+}
+
+ans = ans[-1,]
+
+for(i in 1:(length(ans)/5)){
+  all_8 = permn(setdiff(1:13,ans[i,]))
+  x = ans[i, 5]
+  end = FALSE
+  find = FALSE
+  index = 1
+  a = all_8[[index]]
+  while(!end) {
+    if((a[6] < a[8]) & (a[7] < a[5]) & (a[1] < a[3] + a[4]) & (a[2] + a[3] < x + a[5])){
+      if(((a[1]+a[2])^2 == a[1]*(a[2] + a[3] + a[4]))
+        & ((a[2]+a[3]+a[4])^2 == (a[1]+a[2])*(x + a[4] + a[5]))
+        & ((a[7]+a[8])^2 == (a[6]+a[7])*(a[8] + a[5]))){
+        find = TRUE
+        end = TRUE
+        x = vector("integer", 13)
+        x[1] = ans[i,1]
+        x[2] = ans[i,2]
+        x[3] = ans[i,3]
+        x[4] = ans[i,4]
+        x[5] = ans[i,5]
+        x[6] = a[1]
+        x[7] = a[2]
+        x[8] = a[3]
+        x[9] = a[4]
+        x[10] = a[5]
+        x[11] = a[6]
+        x[12] = a[7]
+        x[13] = a[8]
+        print(x)
+      }
+    }
+    index = index + 1
+    if(index == ((length(all_8))+1)){
+     end = TRUE
+    }
+    else{
+      a = all_8[[index]]
+    }
+  }
+}
+
+
+```
+
+
+***
+
+<h2 dir="RTL">
+مچ گیری
+</h2>
+
+<p dir="RTL">
+میزگردی شامل ۱۶ فرد دروغگو و راستگو تشکیل شده است. هر کسی ادعا میکند دو فرد کنار دستی او دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+
+<p dir="RTL">
+میزگرد دیگری شامل ۱۲ نفر فرد راستگو و دروغگو تشکیل شده به طوری که هر فرد ادعا میکند از میان دو نفر کنار دستی یک نفر راستگو و یک نفر دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+
+<p dir="RTL">
+این دفعه میزگردی هشت نفره تشکیل شده به گونه ایی که چهار نفر ادعا میکنند از از میان دو نفر کنار دستی یکی دروغگو و دیگری راستگوست و چهار نفر دیگر اعلام میکنند که هر دو فرد کنار دستی آنها دروغگو هستند. چند نفر دروغگو در میان جمع است؟
+</p>
+
+```{r}
+# 16 person
+find = FALSE
+is_valid = TRUE
+while(!find){
+  persons = sample(c(0,1), replace=TRUE, size=16)
+  persons[17] = persons[1]
+  persons[18] = persons[2]
+  for(i in 1:16){
+    if(persons[i] == 0){
+      if(persons[i+1] == 0 & persons[i+2] == 0){
+        is_valid = FALSE
+      }
+    }
+    else{
+      if(persons[i+1] == 1){
+        is_valid = FALSE
+      }
+    }
+  }
+  if(is_valid){
+    persons = persons[-17:-18]
+    print(table(persons))
+    print(persons)
+    find = TRUE
+  }
+  else{
+    is_valid = TRUE
+  }
+}
+
+# 12 person
+find = FALSE
+is_valid = TRUE
+persons = vector("integer" , 14)
+temp = vector("integer" , 13)
+while(!find){
+  temp = sample(c(0,1), replace=TRUE, size=12)
+  temp[13] = temp[1]
+  persons[1] = temp[12]
+  for(i in 1:13)
+    persons[i+1] = temp[i]
+  for(i in 2:13){
+    if(persons[i] == 0){
+      if(persons[i-1] == 0 & persons[i+1] == 1){
+        is_valid = FALSE
+      }
+      if(persons[i-1] == 1 & persons[i+1] == 0){
+        is_valid = FALSE
+      }
+    }
+    else{
+      if(persons[i-1] == 1 & persons[i+1] == 1){
+        is_valid = FALSE
+      }
+      if(persons[i-1] == 0 & persons[i+1] == 0){
+        is_valid = FALSE
+      }
+    }
+  }
+  if(is_valid){
+    persons = persons[-14]
+    persons = persons[-1]
+    print(table(persons))
+    print(persons)
+    find = TRUE
+  }
+  else{
+    is_valid = TRUE
+  }
+}
+
+# 8 person
+find = FALSE
+is_valid = TRUE
+persons = vector("integer" , 10)
+temp = vector("integer" , 9)
+g1 = 0
+g2 = 0
+while(!find){
+  temp = sample(c(0,1), replace=TRUE, size=8)
+  temp[9] = temp[1]
+  persons[1] = temp[8]
+  for(i in 1:9)
+    persons[i+1] = temp[i]
+  for(i in 2:9){
+    if(persons[i] == 0){
+      if(persons[i-1] == 0 & persons[i+1] == 0){
+        g1 = g1 + 1
+        if(g1 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 0 & persons[i+1] == 1){
+        g2 = g2 + 1
+        if(g2 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 1 & persons[i+1] == 0){
+        g2 = g2 + 1
+        if(g2 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 1 & persons[i+1] == 0){
+        if(g1 > g2){
+          g2 = g2 + 1
+        }
+        else{
+          g1 = g1 + 1 
+        }
+      }
+    }
+    else{
+      if(persons[i-1] == 0 & persons[i+1] == 0){
+        g2 = g2 + 1
+        if(g2 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 0 & persons[i+1] == 1){
+        g1 = g1 + 1
+        if(g1 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 1 & persons[i+1] == 0){
+        g1 = g1 + 1
+        if(g1 > 4){
+          is_valid = FALSE
+        }
+      }
+      if(persons[i-1] == 1 & persons[i+1] == 1){
+        is_valid = FALSE
+      }
+    }
+  }
+  if(is_valid){
+    persons = persons[-10]
+    persons = persons[-1]
+    print(table(persons))
+    print(persons)
+    find = TRUE
+  }
+  else{
+    is_valid = TRUE
+    g1 = 0
+    g2 = 0
+  }
+}
+
+```
+
+<p dir="RTL">
+اعداد ۱ برابر افراد راستگو و اعداد ۰ برابر افراد دروغگو دور میز میباشند.
+</p>

@@ -1,0 +1,650 @@
+---
+title: "Tenth Week: Principal Component Analysis and Factor Analysis"
+subtitle: "PCA Stock, image, ..."
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/stock.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از داده های OHLCV شرکت های تشکیل دهنده شاخص s&p500 و همچنین داده مربوط به شاخص های اقتصادی به سوالات زیر پاسخ دهید.
+</p>
+
+<p dir='RTL'>
+دادهها و کتابخانههای زیر در طول تمرین مورد استفاده قرارخواهندگرفت.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(dplyr)
+library(highcharter)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+
+name = list.files("../../Data/Stock/stock_dfs/") %>% str_replace(".csv","")
+textpath = list.files("../../Data/Stock/stock_dfs", full.names = T)
+constituents = read_csv("../../Data/Stock/constituents.csv")
+indexes = read_csv("../../Data/Stock/indexes.csv")
+
+.data <- read_csv(textpath[1]) %>% select(Date, Open, High, Low, Close, Volume)
+.data$Name = name[1]
+sp500 = .data
+
+for(i in 2:length(name)){
+  .data <- read_csv(textpath[i]) %>% select(Date, Open, High, Low, Close, Volume)
+  .data$Name = name[i]
+  sp500 = bind_rows(sp500, .data)
+}
+
+sp500 = sp500 %>% 
+  mutate(year = year(Date), month = month(Date), day = day(Date))
+
+.data <- read_csv(textpath[1]) %>% select(Date, Open)
+colnames(.data) =c("Date", name[1])
+sp500_pca = .data
+
+for(i in 2:length(name)){
+  .data <- read_csv(textpath[i]) %>% select(Date, Open)
+  colnames(.data) =c("Date", name[i])
+  sp500_pca = merge(sp500_pca, .data)
+}
+
+sp500_pca= sp500_pca %>% 
+  mutate(year = year(Date), month = month(Date), day = day(Date))
+```
+
+***
+
+<p dir="RTL">
+۱. چه شرکتی رکورددار کسب بیشترین سود در بازه یکساله، دو ساله و پنج ساله می باشد؟ این سوال را برای بخش های مختلف مورد مطالعه قرار دهید و رکورددار را معرفی کنید. (برای این کار به ستون sector داده constituents مراجعه کنید.) برای هر دو قسمت نمودار سود ده شرکت و یا بخش برتر را رسم نمایید.
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+در این سوال در هر بخش جدولی شامل دادههای یکساله و در ادامه نمودار آنها و در آخر  بهترین شرکتها از لحاظ میزان سود نمایشداده میشوند که این مقادیر برحسب مقادیر ابتدایی و انتهایی سال بودهاست.
+برای بازهی دوساله و پنجساله بازههای ابتدایی هر دو یا پنج سال در ستون جدیدی محاسبهشده و به صورتی که در بالا به آن اشارهشد رسم گردیدهاست.
+بهترین سهامها با درنظر گرفتن بیشترین سود در سال و حذف شرکتهای تکراری صورت گرفتهاست.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+sector = constituents %>% 
+  select(Name = Symbol,Sector)
+
+sec_sp500 = sp500 %>% 
+  merge(sector)
+
+start_of_the_year = sec_sp500 %>% 
+  group_by(Name, Sector, year) %>% 
+  arrange(month, day) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  select(Name, year, Start = Close, Sector)
+
+end_of_the_year = sec_sp500 %>% 
+  group_by(Name, Sector, year) %>% 
+  arrange(-month, -day) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  select(Name, year, End = Close, Sector)
+
+price_first_last_day = merge(start_of_the_year,end_of_the_year)
+
+# in one year
+one_year = price_first_last_day %>% 
+  mutate(Change = (End - Start)*100/Start) %>% 
+  group_by(Sector) %>% 
+  arrange(-Change) %>% 
+  slice(1)
+
+knitr::kable(one_year,"html")
+
+ggplot(one_year, aes(x =reorder(Name, Change), y = Change, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Most Profitable Stock In Sectors") +
+  xlab("Name") +
+  ylab("Change %")
+
+# top 10 stocks
+one_year = price_first_last_day %>% 
+  mutate(Change = (End - Start)*100/Start) %>% 
+  group_by(Name) %>% 
+  summarise(bnft = max(Change)) %>% 
+  arrange(-bnft) %>% 
+  slice(1:10) %>% 
+  merge(sector)
+
+knitr::kable(one_year,"html")
+
+ ggplot(one_year, aes(x =reorder(Name, bnft), y = bnft, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Top 10 Stocks In One Year") +
+  xlab("Name") +
+  ylab("Change %")
+
+# in two year
+two_years = price_first_last_day %>% 
+  mutate(Change = (End - Start)/Start)
+two_years$Two_Change = 0
+for(n in name){
+  years = price_first_last_day %>% 
+    filter(Name == n) %>% 
+    select(year)
+  is_first = TRUE
+  for(y in years$year){
+    if(is_first){
+      two_years[two_years$Name == n & two_years$year == y, ]$Two_Change = 0
+      is_first = FALSE
+    }
+    else {
+      two_years[two_years$Name == n & two_years$year == y, ]$Two_Change = 
+        (two_years[two_years$Name == n & two_years$year == y, ]$End -
+        two_years[two_years$Name == n & two_years$year == y-1, ]$Start)*100/
+        two_years[two_years$Name == n & two_years$year == y-1, ]$Start
+    }
+  }
+}
+
+two_years_best = two_years %>% 
+  group_by(Sector) %>% 
+  arrange(-Two_Change) %>% 
+  slice(1) %>% 
+  mutate(start_year = year - 1) %>% 
+  select(Name, Sector, start_year, end_year = year, Two_Change)
+
+knitr::kable(two_years_best,"html")
+
+ggplot(two_years_best, aes(x =reorder(Name, Two_Change), y = Two_Change, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Most Profitable Stock In Sectors In Two Years") +
+  xlab("Name") +
+  ylab("Change %")
+
+# top 10 stocks
+two_years_best = two_years %>% 
+  group_by(Name) %>% 
+  arrange(-Two_Change) %>% 
+  slice(1) %>% 
+  mutate(start_year = year - 1) %>% 
+  select(Name, Sector, start_year, end_year = year, Two_Change) %>% 
+  ungroup() %>% 
+  arrange(-Two_Change) %>% 
+  slice(1:10)
+
+knitr::kable(two_years_best,"html")
+
+ggplot(two_years_best, aes(x =reorder(Name, Two_Change), y = Two_Change, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Top 10 Stock In Two Years") +
+  xlab("Name") +
+  ylab("Change %")
+
+# in five year
+five_years = price_first_last_day %>% 
+  mutate(Change = End - Start)
+five_years$Five_Change = 0
+for(n in name){
+  years = price_first_last_day %>% 
+    filter(Name == n) %>% 
+    select(year)
+  is_five_first = 1
+  for(y in years$year){
+    if(is_five_first < 5){
+      five_years[five_years$Name == n & five_years$year == y, ]$Five_Change = 0
+      is_five_first = is_five_first + 1
+    }
+    else {
+      five_years[five_years$Name == n & five_years$year == y, ]$Five_Change = 
+        (five_years[five_years$Name == n & five_years$year == y, ]$End -
+        five_years[five_years$Name == n & five_years$year == y-4, ]$Start)*100/
+        five_years[five_years$Name == n & five_years$year == y-4, ]$Start
+    }
+  }
+}
+
+five_years_best = five_years %>% 
+  group_by(Sector) %>% 
+  arrange(-Five_Change) %>% 
+  slice(1) %>% 
+  mutate(start_year = year - 4) %>% 
+  select(Name, Sector, start_year, end_year = year, Five_Change)
+
+knitr::kable(five_years_best,"html")
+
+ggplot(five_years_best, aes(x =reorder(Name, Five_Change), y = Five_Change, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Most Profitable Stock In Sectors In Five Years") +
+  xlab("Name") +
+  ylab("Change %")
+
+# top 10 stcks
+five_years_best = five_years %>% 
+  group_by(Name) %>% 
+  arrange(-Five_Change) %>% 
+  slice(1) %>% 
+  mutate(start_year = year - 4) %>% 
+  select(Name, Sector, start_year, end_year = year, Five_Change) %>% 
+  ungroup() %>% 
+  arrange(-Five_Change) %>% 
+  slice(1:10)
+
+knitr::kable(five_years_best,"html")
+
+ggplot(five_years_best, aes(x =reorder(Name, Five_Change), y = Five_Change, fill = Sector)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Top 10 Stocks In Five Years") +
+  xlab("Name") +
+  ylab("Change %")
+
+```
+
+***
+
+<p dir="RTL">
+۲. یک اعتقاد خرافی می گوید خرید سهام در روز سیزدهم ماه زیان آور است. این گزاره را مورد ارزیابی قرار دهید.
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+در این سوال تعداد شرکتهایی که در روز زیان میکنند مورد ارزیابی قرارگرفته است و روی آنها
+t test
+اعمالشده که نتیجه برابر را نمیتواند رد کند پس میتوان گفت فرقی در این روز خاص با روزهای دیگر وجود ندارد.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+sp500_superstition = sp500 %>%
+  mutate(bad_day = ifelse(100*((Close - Open)/Open)<0,1,0)) %>% 
+  group_by(year, month, day, bad_day) %>%
+  summarise(c_jump = n())
+
+thirteen = sp500_superstition %>% filter(day == 13) %>% 
+  ungroup() %>% 
+  group_by(year, month, day) %>% 
+  mutate(fall_rate_company = c_jump/sum(c_jump)) %>% 
+  filter(bad_day == 1)
+non_thirteen = sp500_superstition %>% filter(day != 13) %>% 
+  ungroup() %>% 
+  group_by(year, month, day) %>% 
+  mutate(fall_rate_company = c_jump/sum(c_jump)) %>% 
+  filter(bad_day == 1)
+
+t.test(thirteen$fall_rate_company, non_thirteen$fall_rate_company, alt = "two.sided")
+```
+
+***
+
+<p dir="RTL">
+۳. رکورد بیشترین گردش مالی در تاریخ بورس برای چه روزی بوده است و چرا!!!
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+روز ۸ اکتبر ۲۰۰۸ بیشترین میزان مبادلات از لحاظ حجم صورتگرفتهاست که مصادف با رکوداقتصادی شدید در آمریکاست.
+این رکود به علت از بین رفتن حباب ۸ تریلیون دلاری مسکن بودهاست و بانکهای نیز به طبع این اتفاق دچار بحرانهای اقتصادی میشوند.
+فیلم 
+The Big Short
+این واقعه را روایت میکند.
+بیشترین حجم معاملات از نظر میزان دلار نیز در انتها مشاهده میشود.
+</p>
+
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+max_working_capital_v = sp500 %>%
+  group_by(year, month, day) %>% 
+  summarise(working_capital = sum(as.numeric(Volume))) %>% 
+  arrange(-working_capital) %>% 
+  ungroup() %>% 
+  slice(1)
+
+knitr::kable(max_working_capital_v,"html")
+
+max_working_capital = sp500 %>%
+  mutate(wc = as.numeric(Volume)*(as.numeric(Open + Close)/2)) %>% 
+  group_by(Date) %>% 
+  summarise(working_capital = sum(wc)) %>% 
+  arrange(-working_capital) %>% 
+  slice(1)
+
+knitr::kable(max_working_capital,"html")
+```
+
+***
+
+<p dir="RTL">
+۴. شاخص AAPL که نماد شرکت اپل است را در نظر بگیرید. با استفاده از رگرسیون خطی یک پیش کننده قیمت شروع (open price) بر اساس k روز قبل بسازید. بهترین انتخاب برای k چه مقداری است؟ دقت پیش بینی شما چقدر است؟
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+برای محاسبهی این مدلها مقادیر روزهای قبل برای یک روز ایجاد شد که شما در صورت لزوم تا ده روز قبل را در جلوی یک روز در اختیار دارید.
+همانطور که مشاهدهمیکنید بهترین انتخاب برای ده روز قبل است که کمترین خطا را دارد اما تغییر زیادی در آن مشاهده نمیشود.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+apple_stock = sec_sp500 %>% 
+  filter(Name == "AAPL") %>% 
+  select(year, month, day, Open) %>% 
+  arrange(year, month, day)
+
+apple_stock_k = apple_stock
+apple_stock_k$k_1 = c(0, head(apple_stock_k$Open, -1))
+apple_stock_k$k_2 = c(0,0, head(apple_stock_k$Open, -2))
+apple_stock_k$k_3 = c(0,0,0, head(apple_stock_k$Open, -3))
+apple_stock_k$k_4 = c(0,0,0,0, head(apple_stock_k$Open, -4))
+apple_stock_k$k_5 = c(0,0,0,0,0, head(apple_stock_k$Open, -5))
+apple_stock_k$k_6 = c(0,0,0,0,0,0, head(apple_stock_k$Open, -6))
+apple_stock_k$k_7 = c(0,0,0,0,0,0,0, head(apple_stock_k$Open, -7))
+apple_stock_k$k_8 = c(0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -8))
+apple_stock_k$k_9 = c(0,0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -9))
+apple_stock_k$k_10 = c(0,0,0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -10))
+
+lm_1 = lm(data = apple_stock_k, formula = Open~k_1)
+lm_2 = lm(data = apple_stock_k, formula = Open~k_1+k_2)
+lm_3 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3)
+lm_4 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4)
+lm_5 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5)
+lm_6 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6)
+lm_7 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7)
+lm_8 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8)
+lm_9 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8+k_9)
+lm_10 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8+k_9+k_10)
+summary(lm_10)
+
+# clac Mean Squared Error
+e_1 = summary(lm_1)
+mean(e_1$residuals^2)
+e_2 = summary(lm_2)
+mean(e_2$residuals^2)
+e_3 = summary(lm_3)
+mean(e_3$residuals^2)
+e_4 = summary(lm_4)
+mean(e_4$residuals^2)
+e_5 = summary(lm_5)
+mean(e_5$residuals^2)
+e_6 = summary(lm_6)
+mean(e_6$residuals^2)
+e_7 = summary(lm_7)
+mean(e_7$residuals^2)
+e_8 = summary(lm_8)
+mean(e_8$residuals^2)
+e_9 = summary(lm_9)
+mean(e_9$residuals^2)
+e_10 = summary(lm_10)
+mean(e_10$residuals^2)
+
+```
+
+***
+
+<p dir="RTL">
+۵. بر روی داده های قیمت شروع شرکت ها الگوریتم pca را اعمال کنید. نمودار تجمعی درصد واریانس بیان شده در مولفه ها را رسم کنید. سه مولفه اول چند درصد از واریانس را تبیین می کند؟
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+میزان
+۷۹.۷۶ 
+درصدی ۳ مولفهی اول را مشاهدهمیکنید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+sp500_pca_dmy = sp500_pca %>% 
+  select(-year, -month, -day, -Date)
+stocks_pca = prcomp(sp500_pca_dmy, scale. = TRUE)
+
+plot(summary(stocks_pca)$importance[3,], type="l",
+     ylab="% variance explained", xlab="nth component (decreasing order)") + 
+  abline(h=0.98,col="red");abline(v = 25,col="red",lty=3)
+
+# first three comp.
+sum((stocks_pca$sdev^2)[1:3])/sum((stocks_pca$sdev^2))
+```
+
+***
+
+<p dir="RTL">
+۶. برای هر نماد اطلاعات بخش مربوطه را از داده constituents استخراج نمایید. برای هر بخش میانگین روزانه قیمت شروع شرکت های آن را محاسبه کنید. سپس با استفاده از میانگین به دست آمده  داده ایی با چند ستون که هر ستون یک بخش و هر سطر یک روز هست بسازید. داده مربوط را با داده شاخص های اقتصادی ادغام کنید. بر روی این داده pca بزنید و نمودار biplot آن را تفسیر کنید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+sec_mean_open = sec_sp500 %>% 
+  ungroup() %>% 
+  group_by(Sector,Date) %>% 
+  summarise(mean_open = mean(Open))
+
+sectors = sec_mean_open %>% 
+  ungroup() %>% 
+  select(Sector) %>% 
+  distinct()
+
+.data = sec_mean_open %>%
+  ungroup() %>% 
+  filter(Sector == sectors[[1]][1]) %>% 
+  select(Date, mean_open)
+colnames(.data) =c("Date", sectors[[1]][1])
+sec_sp500_pca = .data
+
+for(i in 2:11){
+  .data <- sec_mean_open %>% 
+    ungroup() %>% 
+    filter(Sector == sectors[[1]][1]) %>% 
+    select(Date, mean_open)
+  colnames(.data) =c("Date", sectors[[1]][i])
+  sec_sp500_pca = merge(sec_sp500_pca, .data)
+}
+
+sec_sp500_pca = merge(sec_sp500_pca, indexes)
+sec_sp500_pca = sec_sp500_pca %>% 
+  select(-Date)
+sec_index_stock_pca = prcomp(sec_sp500_pca, scale. = TRUE)
+biplot(sec_index_stock_pca, scale = 1, pc.biplot = TRUE)
+```
+<p dir="RTL"> 
+جواب:
+<br>
+چیزی که از نمودار برداشت میشود همسو بودن اکثر متغیرها در مولفهی اول است و نزدیکترین متغیر به مولفهی دوم 
+Consumer Price 
+میباشد و متغیرهایی مانند 
+Long Interest Rate
+و
+PE10
+در جهت مخالف قبلی قرار دارند که با مولفهی دوم در ارتباط هستند.
+دادهبه طور کلی دادهای مناسب برای 
+PCA
+بوده و در تعداد کمی مولفه میتوان آن را خلاصهکرد و دادهی زیاد و قابل توجهی را از دست نداد.
+</p>
+
+***
+
+<p dir="RTL">
+۷. روی همه اطلاعات (OHLCV) سهام اپل الگوریتم PCA را اعمال کنید. سپس از مولفه اول برای پیش بینی قیمت شروع سهام در روز آینده استفاده کنید. به سوالات سوال ۴ پاسخ دهید. آیا استفاده از مولفه اول نتیجه بهتری نسبت به داده open price برای پیش بینی قیمت دارد؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(rpart)
+
+apple_ohlcv = sp500 %>% 
+  filter(Name == "AAPL") %>% 
+  arrange(Date) %>% 
+  select(Open, High, Low, Close, Volume)
+
+apple_pca = prcomp(apple_ohlcv, scale. = TRUE)
+
+train = data.frame(open_price = apple_ohlcv$Open, apple_pca$x)
+# only first pc
+train = train[,1:2]
+# linear model
+lm_aapl = lm(open_price ~ PC1 ,data = train)
+summary(lm_aapl)
+# decision tree
+rp_mdl = rpart(open_price ~ .,data = train, method = "anova")
+pred = predict(rp_mdl,newdata = train)
+train$pred = pred
+res = train %>% 
+  mutate(dif = (open_price - pred)^2) %>% 
+  summarise(mean(dif))
+res[[1]][1]
+
+apple_stock_k$Open = train$PC1
+apple_stock_k$k_1 = c(0, head(apple_stock_k$Open, -1))
+apple_stock_k$k_2 = c(0,0, head(apple_stock_k$Open, -2))
+apple_stock_k$k_3 = c(0,0,0, head(apple_stock_k$Open, -3))
+apple_stock_k$k_4 = c(0,0,0,0, head(apple_stock_k$Open, -4))
+apple_stock_k$k_5 = c(0,0,0,0,0, head(apple_stock_k$Open, -5))
+apple_stock_k$k_6 = c(0,0,0,0,0,0, head(apple_stock_k$Open, -6))
+apple_stock_k$k_7 = c(0,0,0,0,0,0,0, head(apple_stock_k$Open, -7))
+apple_stock_k$k_8 = c(0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -8))
+apple_stock_k$k_9 = c(0,0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -9))
+apple_stock_k$k_10 = c(0,0,0,0,0,0,0,0,0,0, head(apple_stock_k$Open, -10))
+
+lm_1 = lm(data = apple_stock_k, formula = Open~k_1)
+lm_2 = lm(data = apple_stock_k, formula = Open~k_1+k_2)
+lm_3 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3)
+lm_4 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4)
+lm_5 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5)
+lm_6 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6)
+lm_7 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7)
+lm_8 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8)
+lm_9 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8+k_9)
+lm_10 = lm(data = apple_stock_k, formula = Open~k_1+k_2+k_3+k_4+k_5+k_6+k_7+k_8+k_9+k_10)
+summary(lm_10)
+
+# clac Mean Squared Error
+e_1 = summary(lm_1)
+mean(e_1$residuals^2)
+e_2 = summary(lm_2)
+mean(e_2$residuals^2)
+e_3 = summary(lm_3)
+mean(e_3$residuals^2)
+e_4 = summary(lm_4)
+mean(e_4$residuals^2)
+e_5 = summary(lm_5)
+mean(e_5$residuals^2)
+e_6 = summary(lm_6)
+mean(e_6$residuals^2)
+e_7 = summary(lm_7)
+mean(e_7$residuals^2)
+e_8 = summary(lm_8)
+mean(e_8$residuals^2)
+e_9 = summary(lm_9)
+mean(e_9$residuals^2)
+e_10 = summary(lm_10)
+mean(e_10$residuals^2)
+```
+<p dir="RTL"> 
+جواب:
+<br>
+مقادیر این روش محاسبهشد و با استفاده از مولفهی اول به طور کلی نه در روش خطی همانند سوال چهار و نه با درخت تصمیم نتیجهی بهتری حاصل نشد و خطای بیشتری مشاهدهمیشد اما در حالت خطی بیشینهی خطا کاهش یافت.
+همانند سوال ۴ نیز این عملیات را تکرار کردیم که نتیجه بهبود چشمگیر داشت و با داشتن ۱۰ روز قبل بهترین نتیجه را گرفتیم.
+</p>
+
+***
+
+<p dir="RTL">
+۸. نمودار سود نسبی شاخص s&p500 را رسم کنید. آیا توزیع سود نرمال است؟(از داده indexes استفاده کنید.)
+با استفاده از ده مولفه اول سوال پنج آیا می توانید سود و ضرر شاخص s&p500 را برای روز آينده پیش بینی کنید؟ از یک مدل رگرسیون لاجستیک استفاده کنید. درصد خطای پیش بینی را به دست آورید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+ind = indexes %>% 
+  select(real_price = `Real Price`,sp500 = SP500) %>% 
+  mutate(index = (sp500-lag(sp500))/lag(sp500))
+ggplot(ind,aes(index)) + geom_histogram(binwidth = 0.005, fill = 'black')
+
+ind = merge(indexes, sp500_pca)
+index_pca = data.frame(sp500_pca, stocks_pca$x)
+index_pca = merge(index_pca,ind)
+index_pca = index_pca %>% 
+  select(-Date)
+glm_sp500 = glm(data = index_pca, formula = SP500 ~ PC1+PC2)
+summary(glm_sp500)
+```
+<p dir="RTL"> 
+جواب:
+<br>
+با توجه به تورم و میزان سرمایهی موجود در بازار سرمایهگذاری میتوان میزان اختلاف شاخص  تقسیم بر شاخص را معیار نسبی قرار داد و این موضوع را مطالعهکرد که مشاهده میشود این توزیع نرمال است.
+<br>
+برای مدل لاجستیک به دلیل تنها وجود ۴ داده مشترک در تاریخ در این دادهها فقط توانستم بر روی دو موئلفهی اول مدل را فیت کنم و با توجه به نتایج حاصلشده میتوان نتیجه گرفت مدل بهتر از حالت رندم عمل میکند و نسبت به این ۴ داده خطای معقولی دارد.
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. عکسی که در ابتدای متن آمده را در نظر بگیرید. با استفاده از pca عکس را فشرده کنید. سپس نمودار حجم عکس فشرده بر حسب تعداد مولفه اصلی را  رسم کنید. بهترین انتخاب برای انتخاب تعداد مولفه ها در جهت فشرده سازی چه عددی است؟
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library("EBImage")
+pic = flip(readImage("images/stock.jpg"))
+
+img1 <- pic[ , , 1]
+img2 <- pic[ , , 2]
+img3 <- pic[ , , 3]
+
+pca.img1 <- prcomp(img1 , scale = T)
+pca.img2 <- prcomp(img2 , scale = T)
+pca.img3 <- prcomp(img3 , scale = T)
+
+plot(summary(pca.img1)$importance[3,], type="l",
+     ylab="%variance explained", xlab="nth component (decreasing order)") + 
+  abline(h=0.99,col="red");abline(v = 80,col="red",lty=3)
+plot(summary(pca.img2)$importance[3,], type="l",
+     ylab="%variance explained", xlab="nth component (decreasing order)") + 
+  abline(h=0.99,col="red");abline(v = 110,col="red",lty=3)
+plot(summary(pca.img3)$importance[3,], type="l",
+     ylab="%variance explained", xlab="nth component (decreasing order)") + 
+  abline(h=0.99,col="red");abline(v = 110,col="red",lty=3)
+
+chosen.components = 1:110
+feature.vector1 = pca.img1$rotation[,chosen.components]
+feature.vector2 = pca.img2$rotation[,chosen.components]
+feature.vector3 = pca.img3$rotation[,chosen.components]
+
+compact.data1 = t(feature.vector1) %*% t(img1)
+compact.data2 = t(feature.vector2) %*% t(img2)
+compact.data3 = t(feature.vector3) %*% t(img3)
+
+approx.img1 = t(feature.vector1 %*% compact.data1) 
+approx.img2 = t(feature.vector2 %*% compact.data2) 
+approx.img3 = t(feature.vector3 %*% compact.data3) 
+
+pic[ , , 1] <- approx.img1
+pic[ , , 2] <- approx.img2
+pic[ , , 3] <- approx.img3
+plot(flip(pic))
+
+```
+<p dir="RTL"> 
+جواب:
+<br>
+در این جا به صورت میانگین مقدار ۱۱۰ را در نظر میگیریم.
+</p>
+***
+
+<p dir="RTL"> 
+۱۰. پنج ایده جالبی که روی داده های مالی بالا می توانستیم پیاده کنیم را بیان کنید. (ایده کافی است نیازی به محاسبه بر روی داده نیست.)
+</p>
+
+<p dir="RTL"> 
+جواب:
+<br>
+۱.بررسی توالی قلهها و سقوطهای یک سهام برای پیشبینی سقوط بعدی یا صعود بعدی
+<br>
+۲. بررسی و پیشبینی سبد سهام برای سود حداکثری
+<br>
+۳.بدست آوردن حاشیهی امنیت برای نگهداشتن یک سهام بر اساس میزان رشد
+<br>
+۴. محاسبهی ترندهای تکنولوژی در هر بخش بر اساس میزان اقبال به یک سهام در یک بخش با درنظر گرفتن حجم معاملات
+<br>
+۵.بررسی درهها در جهت پیشبینی بهترین زمان خرید سهام
+</p>

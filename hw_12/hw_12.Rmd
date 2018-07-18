@@ -1,0 +1,435 @@
+---
+title: "Association rules"
+subtitle: "Movie recommender systems"
+author: "Amirabbas Jalali 93105556"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/rs_cover.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از داده نظرهای فیلم به سوالات زیر پاسخ دهید.
+</p>
+
+<p dir="RTL">
+دادهها و کتابخانههای زیر در این تمرین مورد استفاده قرارمیگیرند.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(readr)
+library(dplyr)
+library(stringr)
+library(reshape2)
+library(corrplot)
+library(wordcloud2)
+library(tidytext)
+library(arules)
+library(arulesViz)
+library(colorspace)
+
+movie = read_delim("../../Data/data_classification/ml-10M100K/movies.dat",
+                   ":",
+                   col_names = c('movie_id', 'a', 'title', 'description', 'genres', 'c')) %>% 
+  select(-a) %>% 
+  mutate(genres = ifelse(!is.na(genres), as.character(genres), as.character(c))) %>% 
+  select(-c) %>% 
+  mutate(title = ifelse(!is.na(description),
+                        paste(title, description, sep=": "),
+                        as.character(title))) %>% 
+  select(-description) %>% 
+  mutate(year = str_extract(title, '\\([[:digit:]]{4}\\)'),
+         year = str_extract(year, '[[:digit:]]{4}'))
+
+movie$Action = 0
+movie$Adventure = 0
+movie$Animation = 0
+movie$Children = 0
+movie$Comedy = 0
+movie$Crime = 0
+movie$Documentary = 0
+movie$Drama = 0
+movie$Fantasy = 0
+movie$`Film-Noir` = 0
+movie$Horror = 0
+movie$Musical = 0
+movie$Mystery = 0
+movie$Romance = 0
+movie$`Sci-Fi` = 0
+movie$Thriller = 0
+movie$War = 0
+movie$Western = 0
+
+movie = movie %>% 
+  mutate(Action = ifelse(str_detect(genres, 'Action'),1,0),
+         Adventure = ifelse(str_detect(genres, 'Adventure'),1,0),
+         Animation = ifelse(str_detect(genres, 'Animation'),1,0),
+         Children = ifelse(str_detect(genres, 'Children'),1,0),
+         Comedy = ifelse(str_detect(genres, 'Comedy'),1,0),
+         Crime = ifelse(str_detect(genres, 'Crime'),1,0),
+         Documentary = ifelse(str_detect(genres, 'Documentary'),1,0),
+         Drama = ifelse(str_detect(genres, 'Drama'),1,0),
+         Fantasy = ifelse(str_detect(genres, 'Fantasy'),1,0),
+         `Film-Noir` = ifelse(str_detect(genres, 'Film-Noir'),1,0),
+          Horror = ifelse(str_detect(genres, 'Horror'),1,0),
+         Musical = ifelse(str_detect(genres, 'Musical'),1,0),
+         Mystery = ifelse(str_detect(genres, 'Mystery'),1,0),
+         Romance = ifelse(str_detect(genres, 'Romance'),1,0),
+         `Sci-Fi` = ifelse(str_detect(genres, 'Sci-Fi'),1,0),
+         Thriller = ifelse(str_detect(genres, 'Thriller'),1,0),
+         War = ifelse(str_detect(genres, 'War'),1,0),
+         Western = ifelse(str_detect(genres, 'Western'),1,0))
+
+movie_name = movie %>% 
+  select(movie_id, title) %>% 
+  distinct(movie_id, title)
+
+rating = read_delim("../../Data/data_classification/ml-10M100K/ratings.dat",
+                   ":",
+                   col_names = c('user_id', 'a', 'movie_id', 'b', 'rating', 'c', 'timestamp')) %>% 
+  select(-a, -b, -c)
+
+tag = read_delim("../../Data/data_classification/ml-10M100K/tags.dat",
+                   ":",
+                   col_names = c('user_id', 'a', 'movie_id', 'b', 'tag', 'c', 'timestamp')) %>% 
+  select(-a, -b, -c)
+``` 
+
+***
+
+<p dir="RTL">
+۱. آماره های زیر را بیابید.
+</p>
+<p dir="RTL">
+الف. محبوب ترین فیلم کدام است؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+top_10_movies = rating %>% 
+  group_by(movie_id) %>% 
+  summarise(mean_rating = mean(rating), voted = n()) %>% 
+  mutate(score = mean_rating*voted) %>% 
+  arrange(-score) %>% 
+  filter(mean_rating > 4.2) %>% 
+  slice(1:10) %>% 
+  arrange(-mean_rating)
+
+top_10_movies = merge(top_10_movies, movie_name, sort = FALSE)
+knitr::kable(top_10_movies, "html")
+```
+<p dir="RTL">
+ب. بیشترین نظرات درباره چه فیلمی داده شده است؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+most_comments = rating %>% 
+  group_by(movie_id) %>% 
+  summarise(voted = n()) %>% 
+  arrange(-voted) %>% 
+  slice(1)
+
+most_comments = merge(most_comments, movie_name, sort = FALSE)
+knitr::kable(most_comments, "html")
+```
+<p dir="RTL">
+پ. منفورترین فیلم کدام است؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+worst_movie = rating %>% 
+  group_by(movie_id) %>% 
+  summarise(mean_rating = mean(rating), voted = n()) %>% 
+  filter(voted > 1000) %>% 
+  arrange(mean_rating, -voted) %>%
+  slice(1)
+
+worst_movie = merge(worst_movie, movie_name, sort = FALSE)
+knitr::kable(worst_movie, "html")
+```
+<p dir="RTL">
+ت. تعداد فیلم های ساخته شده در هر سال
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+most_productive_year = movie %>% 
+  group_by(year) %>% 
+  summarise(count = n()) %>% 
+  na.omit() %>% 
+  arrange(year)
+
+knitr::kable(most_productive_year, "html")
+```
+<p dir="RTL">
+ث. در هر سالی مردم به چه ژانری علاقه مند بوده اند.
+</p>
+<p dir="RTL">
+برای این سوال ژانری که فیلم در آن ساختهشده را برابر علاقهی مردم درنظر میگیریم چون فیلمسازان با توجه به علایق جامعه به تولید فیلم میپردازند.
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+genre_year = movie %>% 
+  group_by(year) %>% 
+  select(-movie_id, -genres, -year, -title) %>% 
+  summarise_all(funs(sum)) %>% 
+  na.omit()
+
+genre_year$genre_of_year = colnames(genre_year %>% select(-year))[apply(genre_year %>% select(-year), 1, which.max)]
+
+genre_of_the_year = genre_year %>% 
+  select(year, genre_of_year)
+
+knitr::kable(genre_of_the_year, "html")
+```
+
+***
+
+<p dir="RTL">
+۲. ژانر فیلم ها را استخراج نمایید.  سپس آماره های زیر را استخراج نمایید.
+</p>
+<p dir="RTL">
+الف. نمودار ستونی تعداد فیلم های هر ژانر
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+genre_movies = movie %>% 
+  ungroup() %>% 
+  select(-movie_id, -genres, -year, -title) %>% 
+  summarise_all(funs(sum)) %>% 
+  na.omit()
+
+genre_movies = melt(genre_movies)
+colnames(genre_movies) = c('genre', 'count')
+```
+
+<p dir="RTL">
+ب. نمودار همبستگی ژانرها
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+genres = movie %>% 
+  select(-movie_id, -genres, -year, -title)
+
+cor_genre = cor(genres)
+corrplot(cor_genre, method = "square", type = "lower", tl.col = "black", tl.srt = 10)
+```
+
+<p dir="RTL">
+پ. متوسط امتیاز به هر ژانر
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+genre_avg_rating = rating %>% 
+  group_by(movie_id) %>% 
+  summarise(mean_rate = mean(rating))
+
+genre_avg_rating = merge(genre_avg_rating, movie, sort = FALSE) %>% 
+  select(-movie_id, -title, -genres, -year)
+
+genre_avg_rating[-1] = genre_avg_rating[["mean_rate"]] * genre_avg_rating[-1]
+
+genre_avg_rating = genre_avg_rating %>% 
+  summarise_all(funs(sum)) %>% 
+  select(-mean_rate) %>% 
+  melt()
+
+colnames(genre_avg_rating) = c('genre', 'sum_rate')
+
+genre_avg_rating = merge(genre_avg_rating, genre_movies) %>% 
+  mutate(avrage_rate = sum_rate/count) %>% 
+  na.omit() %>% 
+  arrange(-avrage_rate)
+
+knitr::kable(genre_avg_rating, "html")
+```
+
+<p dir="RTL">
+ت. دوران طلایی فیلم سازی 
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+year_avg_rating = rating %>% 
+  group_by(movie_id) %>% 
+  summarise(mean_rate = mean(rating))
+
+year_avg_rating = merge(year_avg_rating, movie, sort = FALSE) %>% 
+  group_by(year) %>% 
+  summarise(mean_rate_year = mean(mean_rate), count = n() ) %>% 
+  mutate(score = mean_rate_year*count) %>% 
+  arrange(-score) %>% 
+  slice(1:10) %>% 
+  arrange(-mean_rate_year)
+  
+knitr::kable(year_avg_rating, "html")
+```
+
+***
+
+<p dir="RTL">
+۳. نمودار ابر لغات را بر حسب کلمات عنوان فیلم ها رسم نمایید.
+</p>
+```{r, message = FALSE, comment = NA, warning = FALSE}
+movie_titles = movie %>% 
+  select(title) %>% 
+  mutate(title = str_to_lower(title)) %>% 
+  str_replace_all("\"","") %>% 
+  str_replace_all("\\([[:digit:]]{4}\\)", "") %>%
+  str_replace_all("\\d", "") %>% 
+  str_replace_all("[[:punct:]]", "") %>% 
+  str_split(pattern = "\\s") %>% 
+  unlist() %>%
+  as.data.frame(stringsAsFactors = F) %>% 
+  table() %>% 
+  as.data.frame(stringsAsFactors = F)
+
+colnames(movie_titles) = c("word","freq")
+
+movie_titles = movie_titles %>% 
+  filter(!(word %in% stop_words$word) & str_length(word)>2) %>% 
+  arrange(-freq) %>% 
+  slice(2:900)
+
+wordcloud2(movie_titles, figPath = 'images/film.png', size = 0.6, color = "black")
+```
+
+***
+
+<p dir="RTL">
+۴. با استفاده از قوانین همبستگی یک توصیه گر برای فیلم ها بسازید. شبیه ترین فیلم ها به لیست زیر را پیدا کنید.
+</p>
+
+* Castle in the Sky (1986)
+* Cast Away (2000)
+* No Country for Old Men (2007)
+* Memento (2000)
+
+<p dir="RTL">
+تراکنشها را باتوجه به علایق یک مشتری در دیدن چندین فیلم بهدستآوردهام به این صورت که هر شناسهی هر کاربر شناسهی یک تراکنش است و فیلمهایی که بالای ۳ نمرهدهی کرده محتوای آن تراکنش.
+بعد از استفاده از قوانین همبستگی و بدستآوردن نام فیلمها متوجهشدم که فیلمهای سمت راست را با فیلمهای دادهشده تطابق دهم زیرا نتایج بهتری بهدست میآورد که نتایج را در جدول میبینیم.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+trans = rating %>% 
+  filter(rating>3) %>% 
+  select(user_id, movie_id)
+
+trans = unique(trans)
+trans = as(split(trans$movie_id, trans[,"user_id"]), "transactions")
+
+as_rules = apriori(trans,parameter = list(supp = 0.001, conf = 0.5, maxlen = 2))
+summary(as_rules)
+
+as_rules = subset(as_rules, lift >= 4.348)
+summary(as_rules)
+
+as_rules = as(as_rules,"data.frame")
+movie_rules = as_rules %>% 
+  mutate(lhs = str_extract(rules, "[[:digit:]]+"),
+         rhs = str_extract(rules, " \\{[[:digit:]]+"),
+         rhs = str_extract(rhs, "[[:digit:]]+")) %>% 
+  select(movie_id = lhs, support, lift, confidence, rhs)
+
+movie_rules = merge(movie_name, movie_rules, sort = FALSE)
+movie_rules = movie_rules %>% 
+  select(lhs_movie_name = title, movie_id = rhs, support, lift, confidence, lhs = movie_id )
+movie_rules = merge(movie_name, movie_rules, sort = FALSE)
+movie_rules = movie_rules %>% 
+  select(lhs_movie_name, rhs_movie_name = title, lhs, rhs = movie_id, support, confidence, lift)
+
+selected_movie_rules = movie_rules %>% 
+  filter(lhs_movie_name == "Castle in the Sky (Tenkû no shiro Rapyuta) (1986)" |
+           rhs_movie_name == "Castle in the Sky (Tenkû no shiro Rapyuta) (1986)" |
+           lhs_movie_name == "Cast Away (2000)" |
+           rhs_movie_name == "Cast Away (2000)" |
+           lhs_movie_name == "No Country for Old Men (2007)" |
+           rhs_movie_name == "No Country for Old Men (2007)" |
+           lhs_movie_name == "Memento (2000)" |
+           rhs_movie_name == "Memento (2000)"
+           )%>%
+  group_by(rhs_movie_name) %>% 
+  arrange(-lift) %>%
+  filter(rhs_movie_name == "Castle in the Sky (Tenkû no shiro Rapyuta) (1986)" |
+           rhs_movie_name == "Cast Away (2000)" |
+           rhs_movie_name == "No Country for Old Men (2007)" |
+           rhs_movie_name == "Memento (2000)"
+           )%>%
+  slice(1) %>% 
+  select(main_movie = rhs_movie_name, most_simillar_movie = lhs_movie_name)
+
+knitr::kable(selected_movie_rules, "html")
+```
+
+***
+
+<p dir="RTL">
+۵. تمرین سخت: در گیت هاب برای خود اکانت درست کنید. همه تمرین های خود را آنجا بارگذاری کنید! و لینک آن را ارسال نمایید.
+</p>
+
+<p dir="RTL">
+لینک تمارین:
+
+</p>
+
+***
+
+<p dir="RTL">
+۶. پنج انتقاد از درس و نحوه تدریس را بیان کنید.
+</p>
+
+<p dir="RTL">
+۱. رویکرد درس از قبل متفاوتتر شده بود و کمتر مهندسی بود به این مفهوم که امتحانات کاملا ریاضیوار برگذار شدند و کمتر اهمیت درک ما از نتایج مورد توجه بود و بیشتر محاسباتی مد نظر بود که در طول تمارین به آنها هرگز پرداخته نمیشد.
+۲. حجم تمارین و پروژه بیسابقه بود! :)
+۳. خیلی سختگیرانس ولی خب اسلاید هرچی جلوتر رفتیم کیفیتشون کمتر میشد.
+۴. تعداد دقیق برای انتقاد خوب نیست، شاید یکی ۶ تا انتقاد خوب داشت!
+۵. پنجتا انتقاد واقعا زیاده ندارم ...
+</p>
+
+***
+
+<p dir="RTL">
+۷. پنج پیشنهاد برای بهتر شدن درس بیان کنید.
+</p>
+
+<p dir="RTL">
+۱. رویکرد مهندسی رو در این درس دوباره احیا کنید ...
+۲. تمارین رو اندکی کاهشدهید.
+۳. ارتباط استادیارها رو با دانشجوها بیشتر کنید و یکم فورسشون کنید اشکالات تمرینات بچهها رو زودتر بگن نه بعد از اینکه کلا تمرینات یک مبحث تموم میشه.
+۴. نمرهها رو خب زودتر بدید آدم بفهمه چند چنده ...
+۵. عدد دقیق کلا برای اینجور سوالا درست نیست به نظرم!
+</p>
+
+***
+
+<p dir="RTL">
+۸. سه موضوع آماری جدید برای جایگزینی در سرفصل ها پیشنهاد دهید.
+</p>
+
+<p dir="RTL">
+۱. یادگیری عمیق!
+۲. Омӯзиши тозагӣ
+۳. Fianarana lalina
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. سه داده جالب برای کار در کلاس پیشنهاد دهید.
+</p>
+
+<p dir="RTL">
+۱. رمزارزها رو جای سهامها بیارید.
+۲. از دادههای تلفنهای همراه متصل به آنتنها برای یافتن شلوغیها و مسیر حرکت مردم روی نقشه.
+۳. انتخابات آمریکا
+</p>
+
+***
+
+<p dir="RTL"> 
+۱۰. چهار نکته مهمی که در کلاس یاد گرفتید را بیان کنید.
+</p>
+
+<p dir="RTL">
+۱. بدون گل قطعا بهار نمیشه!
+۲. خیلی R
+۳. تلاش کنم و زیر بار تمرینها کمر خم نکنم که بعد از هر سختی آسانیست ...:)
+۴. آزمون فرض
+</p>

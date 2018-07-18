@@ -1,0 +1,729 @@
+---
+title: 'Eighth Week: Text Analysis in R'
+subtitle: 'To be, or not to be'
+author: 'Amirabbas Jalali 93105556'
+date: '`r Sys.time()`'
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align='center'>
+<img  src='images/dickens1_1.png'  align = 'center'>
+</div>
+
+> <p dir='RTL'> 
+با استفاده از بسته gutenberg داده های لازم را به دست آورید و به سوالات زیر پاسخ دهید.
+</p>
+
+***
+<p dir='RTL'>
+دادهها و کتابخانههای زیر در طول تمرین مورد استفاده قرارخواهندگرفت.
+<br>
+برای کتابهای چالرز دیکنز یک بار تمامی کتابهای او از کتابخانهی گوتنبرگ استخراج شد و شناسه مربوط به رمانهای وی استخراج شد که در زیر میبینید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(gutenbergr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(highcharter)
+library(wordcloud2)
+
+d_books_g = gutenberg_works(author == "Dickens, Charles")
+d_books = c(580,730,967,700,917,968,821,766,1023,786,963,98,1400,883,564)
+d_books_title = d_books_g %>% 
+  filter(gutenberg_id %in% d_books) %>% 
+  select(title,gutenberg_id)
+
+```
+
+```{r, message = FALSE, comment = NA, warning = FALSE, eval=FALSE}
+books_texts = list()
+for(i in 1:length(d_books)){
+  book = gutenberg_download(d_books[i])
+  books_texts[[i]] = book
+}
+
+saveRDS(books_texts, file='data/bookstext.rds')
+```
+
+***
+
+<p dir='RTL'>
+۱. چارلز دیکنز نویسنده معروف انگلیسی بالغ بر چهارده رمان (چهارده و نیم) نوشته است. متن تمامی کتاب های او را دانلود کنید و سپس بیست لغت برتر استفاده شده را به صورت یک نمودار ستونی نمایش دهید. (طبیعتا باید ابتدا متن را پاکسازی کرده و stopping words را حذف نمایید تا به کلماتی که بار معنایی مشخصی منتقل می کنند برسید.)
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+books_texts = readRDS(file='data/bookstext.rds')
+
+all_books_words = list()
+for(i in 1:length(d_books)){
+  book = books_texts[[i]]
+  words = book %>% 
+    mutate(text = str_to_lower(text)) %>% 
+    select(text) %>% 
+    str_replace_all('\"','') %>%
+    str_replace_all('=','') %>% 
+    str_replace_all('==','') %>% 
+    str_replace_all('[[:punct:]]','') %>% 
+    str_split(pattern = '\\s') %>% 
+    unlist()
+  words = as.data.frame(words, stringsAsFactors = FALSE)
+    if(i == 1){
+      all_books_words = words
+    } else {
+      all_books_words = bind_rows(all_books_words, words)
+    }
+}
+
+all_books_words = as.data.frame(all_books_words %>% table(dnn = list('word')),responseName = 'freq' ,stringsAsFactors = FALSE)
+  
+all_books_words = all_books_words %>%
+    filter(!word %in% stop_words$word & str_length(word)>1 & !str_detect(word,'\\d')) %>% 
+    arrange(desc(freq))
+
+top_20_freq = all_books_words %>% slice(1:20)
+
+top_20_freq %>% 
+  hchart(type = 'column',hcaes(x = word, y = freq)) %>% 
+  hc_title(text = 'Most Frequent Words') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Word'))
+```
+<p dir='RTL'>
+جواب:
+<br>
+نمودار لغات پرتکرار را بعد از تمیزکردن متن از علائمنگارشی و لغات ربط رسم کردهام.
+</p>
+
+***
+
+<p dir='RTL'>
+۲. ابر لغات ۲۰۰ کلمه پرتکرار در رمان های چارلز دیکنز را رسم نمایید. این کار را با بسته wordcloud2 انجام دهید. برای دانلود می توانید به لینک زیر مراجعه کنید.
+</p>
+
+https://github.com/Lchiffon/wordcloud2
+
+<p dir='RTL'>
+ با استفاده از عکسی که در ابتدا متن آمده ابر لغاتی مانند شکل زیر رسم کنید. (راهنمایی: از ورودی figpath در دستور wordcloud2 استفاده نمایید.مثالی در زیر آورده شده است.)
+</p>
+
+<div align='center'>
+<img  src='images/tag-word-cloud-Che-Guevara.jpg'  align = 'center'>
+</div>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+word_2_cloud = all_books_words[1:800,]
+wordcloud2(word_2_cloud , figPath = 'images/dickens1_1.png' ,size = 0.4, color = "black")
+
+```
+<p dir='RTL'>
+جواب:
+<br>
+از کتابخانهی 
+wordcloud2
+بهرهگرفتهام و دادههای سوال قبل را روی عکس زیر پیادهکردم.
+</p>
+
+***
+
+<p dir='RTL'>
+۳. اسم پنج شخصیت اصلی در هر رمان دیکنز را استخراج کنید و با نموداری تعداد دفعات تکرار شده بر حسب رمان را رسم نمایید. (مانند مثال کلاس در رسم اسامی شخصیت ها در سری هر پاتر)
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+book_chars = list()
+for(i in 1:length(d_books)){
+  book = books_texts[[i]]
+  words = as.data.frame(table(book %>% 
+                                str_replace_all('\"','') %>%
+                                str_replace_all('=','') %>% 
+                                str_replace_all('==','') %>% 
+                                str_replace_all('[[:punct:]]','') %>%
+                                str_split(pattern = '\\s') %>% 
+                                unlist(), dnn = list('word')), responseName = "freq" )
+  
+  x = d_books_title %>% filter(gutenberg_id == d_books[i])
+  
+  chars = words %>%
+    filter(!str_to_lower(word) %in% stop_words$word & str_length(word)>1 & !str_detect(word,"\\d") & !str_detect(word,"Sir"), !str_detect(word,"Miss")) %>% 
+    arrange(desc(freq)) %>% 
+    mutate(is_char_name = !word %in% str_to_lower(word), book_title = x$title) %>% 
+    filter(is_char_name == TRUE) %>% 
+    select(char = word, freq, title = book_title)
+  
+  book_chars[[i]] = chars
+}
+
+book_chars = bind_rows(book_chars)
+top_5_book_chars = book_chars %>% 
+  group_by(title) %>% 
+  arrange(-freq) %>% 
+  slice(1:5) %>% 
+  ungroup()
+
+hchart(top_5_book_chars, type = 'column', hcaes(x = char, y = freq, group = title)) %>% 
+  hc_title(text = 'Most Frequent Characters in Dickens\'s Novels') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Character'))
+
+```
+
+<p dir='RTL'>
+جواب:
+<br>
+برای بدستآوردن اسامی شخصیتها لغاتی را استخراجکردم که همواره با حروف بزرگ شروع میشدند و در متن با حرف کوچک این آن یافت نمیشد.
+تمیزکاری دادهها را همانند قبل انجامدادهام.
+این نمودار برحسب کتاب گروهبندی شدهاست و نامهای مانند
+Tom 
+در دو کتاب وجوددارند که جابجایی رنگها به همین علت است.
+</p>
+
+***
+
+<p dir='RTL'>
+۴.  در بسته tidytext داده ایی به نام sentiments وجود دارد که فضای احساسی لغات را مشخص می نماید. با استفاده از این داده نمودار ۲۰ لغت برتر negative و ۲۰ لغت برتر positive را در کنار هم رسم نمایید. با استفاده از این نمودار فضای حاکم بر داستان چگونه ارزیابی می کنید؟ (به طور مثال برای کتاب داستان دو شهر فضای احساسی داستان به ترتیب تکرر در نمودار زیر قابل مشاهده است.)
+</p>
+
+<div align='center'>
+<img  src='images/sentiments.png'  align = 'center'>
+</div>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+n_p = sentiments %>% 
+  filter(sentiment == 'positive' | sentiment == 'negative') %>% 
+  select(word, sentiment)
+
+sen_freq = all_books_words %>% 
+  mutate(NP = ifelse(word %in% n_p$word,1,0)) %>% 
+  filter(NP == 1) %>% 
+  select(word, freq)
+
+selected_np = n_p %>% 
+  filter(word %in% sen_freq$word) %>% 
+  distinct(.) %>% 
+  mutate(sentiment = ifelse(sentiment == 'positive', 1,-1)) %>% 
+  group_by(word) %>% 
+  summarise(sentiment = mean(sentiment))
+  
+sen_freq = merge(sen_freq,selected_np)
+
+x = sen_freq %>% 
+  filter(sentiment == 1) %>% 
+  mutate(sentiment = 'positive') %>% 
+  arrange(-freq) %>% 
+  slice(1:20)
+
+y = sen_freq %>% 
+  filter(sentiment == -1) %>% 
+  mutate(sentiment = 'negative') %>% 
+  arrange(-freq) %>% 
+  slice(1:20)
+
+b = bind_rows(x,y)
+
+hchart(b, 'column', hcaes(x = word, y = freq, group = sentiment)) %>% 
+  hc_title(text = 'Most Frequent positive and negative words in Dickens\'s Novels') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'word')) 
+
+book_sentiment = list()
+for(i in 1:length(d_books)){
+  book = books_texts[[i]]
+  words = as.data.frame(table(book %>% 
+                                str_replace_all('\"','') %>%
+                                str_replace_all('=','') %>% 
+                                str_replace_all('==','') %>% 
+                                str_replace_all('[[:punct:]]','') %>%
+                                str_split(pattern = '\\s') %>% 
+                                unlist(), dnn = list('word')), responseName = "freq" )
+  
+  x = d_books_title %>% filter(gutenberg_id == d_books[i])
+  
+  w = words %>%
+    filter(!str_to_lower(word) %in% stop_words$word & str_length(word)>1 & !str_detect(word,"\\d") & !str_detect(word,"Sir"), !str_detect(word,"Miss")) %>% 
+    arrange(desc(freq)) %>%
+    mutate(book_title = x$title) %>% 
+    select(word, freq, title = book_title)
+  
+  book_sentiment[[i]] = w
+}
+
+book_sentiment = bind_rows(book_sentiment)
+
+book_sent_title_pos = book_sentiment %>% 
+  group_by(title) %>% 
+  merge(n_p, by = 'word') %>% 
+  ungroup() %>% 
+  group_by(title) %>% 
+  arrange(-freq) %>% 
+  filter(sentiment == 'positive') %>% 
+  slice(1:20)
+
+book_sent_title_neg = book_sentiment %>% 
+  group_by(title) %>% 
+  merge(n_p, by = 'word') %>% 
+  ungroup() %>% 
+  group_by(title) %>% 
+  arrange(-freq) %>% 
+  filter(sentiment == 'negative') %>% 
+  slice(1:20)
+
+book_sent_title = bind_rows(book_sent_title_neg,book_sent_title_pos)
+
+hchart(book_sent_title, type = 'column', hcaes(x = word, y = freq, group = title, color = sentiment)) %>% 
+  hc_title(text = 'Most Frequent positive (yellow) and negative (purple) words in Dickens\'s Novels') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Word'))
+
+```
+<p dir='RTL'>
+جواب:
+<br>
+این نمودار به صورت جمعی بار منفی و مثبت لغات را بررسی میکند.
+لغات با بار منفی به رنگ بنفش و لغات با بار مثبت به رنگ زرد مشخص شدهاند.
+میتوان از لجند موجود در پایین صفحه برای مشاهدهی یک کتاب بهرهبرد.
+نمودار کلی نیز در ابتدا رسم شدهاست.
+</p>
+***
+
+<p dir='RTL'>
+۵. متن داستان بینوایان را به ۲۰۰ قسمت مساوی تقسیم کنید. برای هر قسمت تعداد لغات positive و negative را حساب کنید و سپس این دو سری زمانی را در کنار هم برای مشاهده فضای احساسی داستان رسم نمایید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+v_books_g = gutenberg_works(author == "Hugo, Victor")
+lesmis_id = c(48731,48732,48733,48734,48735)
+v_books_title = v_books_g %>% 
+  filter(gutenberg_id %in% lesmis_id) %>% 
+  select(title,gutenberg_id)
+```
+
+```{r, message = FALSE, comment = NA, warning = FALSE, eval = FALSE}
+lesmis_texts = list()
+for( i in 1:length(lesmis_id)){
+  book = gutenberg_download(lesmis_id[i])
+  lesmis_texts[[i]] = book
+}
+
+saveRDS(lesmis_texts, file='data/lesmis_texts.rds')
+```
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+lesmis_texts = readRDS(file='data/lesmis_texts.rds')
+
+for(i in 1:length(lesmis_id)){
+  book = lesmis_texts[[i]]
+  word = book %>% 
+    mutate(text = str_to_lower(text)) %>% 
+    select(text) %>% 
+    str_replace_all('\"','') %>%
+    str_replace_all('\"\"','') %>%
+    str_replace_all('=','') %>% 
+    str_replace_all('==','') %>% 
+    str_replace_all('[[:punct:]]','') %>% 
+    str_split(pattern = '\\s') %>% 
+    unlist() 
+  
+  word = as.data.frame(word, stringsAsFactors = FALSE)
+  
+    if(i == 1){
+      lesmis_words = word
+    } else {
+      lesmis_words = bind_rows(lesmis_words, word)
+    }
+}
+
+chunks = split(lesmis_words, rep(1:200,each=2743))
+
+story_mood = list()
+for(i in 1:200){
+    chunk = chunks[[i]]
+    chunk = chunk %>% 
+      group_by(word) %>% 
+      summarise(freq = n()) %>% 
+      filter(!word %in% stop_words$word & str_length(word)>1 & !str_detect(word,'\\d'))
+    mood = merge(chunk,n_p, by = 'word')
+    mood = mood %>% 
+      mutate(sentiment = ifelse(sentiment == 'positive',1,-1), score = freq*sentiment) %>% 
+      summarise(sum(score))
+    story_mood[i] = mood[1][[1]]
+}
+
+s_m = data.frame(chunk=integer(200),
+                 mood=integer(200),
+                 stringsAsFactors=FALSE)
+
+s_m$mood = story_mood
+s_m$chunk = 1:200
+
+hchart(s_m,'line', hcaes(x = chunk, y = mood)) %>% 
+  hc_title(text = 'Story Mood') %>%
+  hc_yAxis(title = list(text = 'Mood')) %>% 
+  hc_xAxis(title = list(text = 'Chunk'))
+```
+<p dir='RTL'>
+جواب:
+<br>
+بعد از استخراج بار لغات به آنها مقادیر 
++۱
+و
+-۱
+را نسبت دادم و مجموع آنها را برای هر قسمت محاسبه کردم و آنرا در نمودار خطی رسم کردهام.
+به طور کلی فضای داستان حاوی لغات اکثرا منفیاست.
+</p>
+
+***
+
+<p dir='RTL'>
+۶. ابتدا ترکیبات دوتایی کلماتی که پشت سر هم می آیند را استخراج کنید و سپس نمودار ۳۰ جفت لغت پرتکرار را رسم نمایید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+library(stopwords)
+sw = stopwords('fr')
+lesmis_words_6 = lesmis_words %>% 
+  filter(!word %in% sw & !word %in% stop_words$word & str_length(word)>1 & !str_detect(word,'\\d') & !str_detect(word,'chapter'))
+
+lesmis_words_e = lesmis_words_6 %>% 
+  mutate(id = 1:nrow(lesmis_words_6), sp = id%%2) %>% 
+  filter(sp == 0) %>% 
+  select(word)
+
+lesmis_words_o = lesmis_words_6 %>% 
+  mutate(id = 1:nrow(lesmis_words_6), sp = id%%2) %>% 
+  filter(sp == 1) %>% 
+  select(word)
+
+pair_les_word_1 = bind_cols(lesmis_words_e,lesmis_words_o)
+
+lesmis_words_o = lesmis_words_o %>%
+  filter(row_number() != 1)
+
+lesmis_words_e = lesmis_words_e %>% 
+  filter(row_number() != 94554)
+
+pair_les_word_2 = bind_cols(lesmis_words_o,lesmis_words_e)
+
+pair_les_word = bind_rows(pair_les_word_1,pair_les_word_2)
+top_30_pair = pair_les_word %>% 
+  group_by(word,word1) %>% 
+  summarise(freq = n()) %>% 
+  ungroup() %>% 
+  arrange(-freq) %>% 
+  slice(1:30) %>% 
+  mutate(name = paste(word1,word, sep = ','))
+
+hchart(top_30_pair, 'column', hcaes(x = name, y = freq)) %>% 
+  hc_title(text = 'Top 30 Most Frequent Pair words') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Word'))
+
+```
+<p dir='RTL'>
+جواب:
+<br>
+برای بدست آوردن جفت کلمات لغات با شماره ردیف زوج و فرد و هم به صورت فرد بعدی به همراه زوج بعدی استخراج شدند و لغات ربط حذف شد و نتیجه در نمودار پیادهشد.
+</p>
+
+***
+
+<p dir='RTL'>
+۷. جفت کلماتی که با she و یا he آغاز می شوند را استخراج کنید. بیست فعل پرتکراری که زنان و مردان در داستان های دیکنز انجام می دهند را استخراج کنید و نمودار آن را رسم نمایید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+lesmis_words_7 = lesmis_words %>% 
+  filter(str_length(word)>1 & !str_detect(word,'\\d'))
+
+lesmis_words_e = lesmis_words %>% 
+  mutate(id = 1:nrow(lesmis_words), sp = id%%2) %>% 
+  filter(sp == 0) %>% 
+  select(word)
+
+lesmis_words_o = lesmis_words %>% 
+  mutate(id = 1:nrow(lesmis_words), sp = id%%2) %>% 
+  filter(sp == 1, id != 274213) %>% 
+  select(word)
+
+lesmis_action = bind_cols(lesmis_words_o,lesmis_words_e)
+
+lesmis_action_he = lesmis_action %>% 
+  filter(word == 'he', !word1 %in% sw, !word1 %in% stop_words$word) %>% 
+  mutate(action = paste(word,word1, sep = ' ')) %>% 
+  group_by(action) %>% 
+  summarise(freq = n()) %>% 
+  ungroup() %>% 
+  arrange(-freq) %>% 
+  slice(2:21)
+
+hchart(lesmis_action_he, 'column', hcaes(x = action, y = freq)) %>% 
+  hc_title(text = 'Top 30 Most Frequent Men Actions') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Action'))
+
+lesmis_action_she = lesmis_action %>% 
+  filter(word == 'she', !word1 %in% sw, !word1 %in% stop_words$word) %>% 
+  mutate(action = paste(word,word1, sep = ' ')) %>% 
+  group_by(action) %>% 
+  summarise(freq = n()) %>% 
+  ungroup() %>% 
+  arrange(-freq) %>% 
+  slice(2:21)
+
+hchart(lesmis_action_she, 'column', hcaes(x = action, y = freq)) %>% 
+  hc_title(text = 'Top 30 Most Frequent Women Actions') %>%
+  hc_yAxis(title = list(text = 'Frequency')) %>% 
+  hc_xAxis(title = list(text = 'Action'))
+
+```
+<p dir='RTL'>
+جواب:
+<br>
+برای اینکار همانند سوال قبل عملکرده و با این تفاوت که برای
+he
+و
+she
+لغات بعدی آنها را بعد از تمیزکاری در نظر گرفتهام و شمارش آنها را در نظر گرفتم و آن را در نمودار کشیدهام.
+</p>
+***
+
+<p dir='RTL'>
+۸. برای کتاب های دیکنز ابتدا هر فصل را جدا کنید. سپی برای هر فصل 
+1-gram, 2-gram
+را استخراج کنید. آیا توزیع  N-gram
+در کارهای دیکنز یکسان است؟ با رسم نمودار هم این موضوع را بررسی کنید.
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+d_ngm_1 = list()
+for(i in 1:length(d_books)){
+  book = books_texts[[i]]
+  x = d_books_title %>% filter(gutenberg_id == d_books[i])
+  wbook = book %>% mutate(linenumber = row_number(),
+                          chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]+", 
+                                                                  ignore_case = TRUE)))) %>%
+    filter(text != "") %>% 
+    unnest_tokens(bigram, text, token = "ngrams", n = 1) %>% 
+    mutate(book = x$title)
+  d_ngm_1[[i]] = wbook
+}
+
+d_ngm_books_1 = bind_rows(d_ngm_1)
+
+d_ngm_1_freq = d_ngm_books_1 %>%
+  filter(!bigram %in% stop_words$word) %>% 
+  group_by(book ,chapter) %>% 
+  mutate(total_words = n()) %>% 
+  ungroup() %>% 
+  group_by(book ,chapter, bigram) %>% 
+  mutate(freq = n()) %>% 
+  mutate(tf = freq/total_words) %>% 
+  summarise(freq = mean(freq), tf = mean(tf)) %>% 
+  ungroup() %>% 
+  group_by(book, chapter) %>% 
+  arrange(-freq) %>% 
+  mutate(rank = row_number())
+
+coefi = lm(log10(tf) ~ log10(rank), data = d_ngm_1_freq)
+ggplot(d_ngm_1_freq, aes(rank, tf, color = book)) + 
+  geom_abline(intercept = coefi$coefficients[1], slope = coefi$coefficients[2], color = "gray85", linetype = 2) +
+  geom_line(size = 1.1, alpha = 1) + 
+  ylab("Frequency") +
+  ggtitle("1-gram Distribution in Dickens\'s Novel") +
+  scale_x_log10() +
+  scale_y_log10()
+
+d_ngm_2 = list()
+for(i in 1:length(d_books)){
+  book = books_texts[[i]]
+  x = d_books_title %>% filter(gutenberg_id == d_books[i])
+  wbook = book %>% mutate(linenumber = row_number(),
+                          chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]+", 
+                                                                  ignore_case = TRUE)))) %>%
+    filter(text != "") %>% 
+    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>% 
+    mutate(book = x$title)
+  d_ngm_2[[i]] = wbook
+}
+
+d_ngm_books_2 = bind_rows(d_ngm_2)
+
+d_ngm_2_freq = d_ngm_books_2 %>%
+  filter(!bigram %in% stop_words$word) %>% 
+  group_by(book ,chapter) %>% 
+  mutate(total_words = n()) %>% 
+  ungroup() %>% 
+  group_by(book ,chapter, bigram) %>% 
+  mutate(freq = n()) %>% 
+  mutate(tf = freq/total_words) %>% 
+  summarise(freq = mean(freq), tf = mean(tf)) %>% 
+  ungroup() %>% 
+  group_by(book, chapter) %>% 
+  arrange(-freq) %>% 
+  mutate(rank = row_number())
+
+coefi = lm(log10(tf) ~ log10(rank), data = d_ngm_2_freq)
+ggplot(d_ngm_1_freq, aes(rank, tf, color = book)) + 
+  geom_abline(intercept = coefi$coefficients[1], slope = coefi$coefficients[2], color = "gray85", linetype = 2) +
+  geom_line(size = 1.1, alpha = 1) + 
+  ylab("Frequency") +
+  ggtitle("2-gram Distribution in Dickens\'s Novel") +
+  scale_x_log10() +
+  scale_y_log10()
+```
+<p dir='RTL'>
+جواب:
+<br>
+با استفاده از رجکس فصلهای کتاب را با به صورت جمع تجمعی دیدن لغت 
+chapter
+در نظر میگیریم و 
+2-gram
+و
+1-gram
+را بدستمیآوریم و نمودار توزیع آن را میکشیم.
+از روی نمودار به سختی میتوان به نوع توزیع آن پیبرد اما در بعضی کتاب ها رفتار مشابهی مشاهدهمیشود.
+و روی هم افتادگی آنها میتواند دلیلی بر یکسانبودن رفتار نویسنده در کتابهایش باشد.
+</p>
+
+***
+
+<p dir='RTL'> 
+۹. برای آثار ارنست همینگوی نیز تمرین ۸ را تکرار کنید. آیا بین آثار توزیع n-grams در بین آثار این دو نویسنده یکسان است؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+v_ngm_1 = list()
+for(i in 1:length(lesmis_id)){
+  book = lesmis_texts[[i]]
+  x = v_books_title %>% filter(gutenberg_id == lesmis_id[i])
+  wbook = book %>% mutate(linenumber = row_number(),
+                          chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]+", 
+                                                                  ignore_case = TRUE)))) %>%
+    filter(text != "") %>% 
+    mutate(book = x$title) %>% 
+    unnest_tokens(bigram, text, token = "ngrams", n = 1)
+  v_ngm_1[[i]] = wbook
+}
+
+v_ngm_books_1 = bind_rows(v_ngm_1)
+
+v_ngm_1_freq = v_ngm_books_1 %>%
+  filter(!bigram %in% stop_words$word) %>% 
+  group_by(book ,chapter) %>% 
+  mutate(total_words = n()) %>% 
+  ungroup() %>% 
+  group_by(book ,chapter, bigram) %>% 
+  mutate(freq = n()) %>% 
+  mutate(tf = freq/total_words) %>% 
+  summarise(freq = mean(freq), tf = mean(tf)) %>% 
+  ungroup() %>% 
+  group_by(book, chapter) %>% 
+  arrange(-freq) %>% 
+  mutate(rank = row_number())
+
+coefi = lm(log10(tf) ~ log10(rank), data = v_ngm_1_freq)
+ggplot(v_ngm_1_freq, aes(rank, tf, color = book)) + 
+  geom_abline(intercept = coefi$coefficients[1], slope = coefi$coefficients[2], color = "gray85", linetype = 2) +
+  geom_line(size = 1.1, alpha = 1) + 
+  ylab("Frequency") +
+  ggtitle("1-gram Distribution in Les Miserable") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+v_ngm_2 = list()
+for(i in 1:length(lesmis_id)){
+  book = lesmis_texts[[i]]
+  x = v_books_title %>% filter(gutenberg_id == lesmis_id[i])
+  wbook = book %>% mutate(linenumber = row_number(),
+                          chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]+", 
+                                                                  ignore_case = TRUE)))) %>%
+    filter(text != "") %>% 
+    mutate(book = x$title) %>% 
+    unnest_tokens(bigram, text, token = "ngrams", n = 2)
+  v_ngm_2[[i]] = wbook
+}
+
+v_ngm_books_2 = bind_rows(v_ngm_2)
+
+v_ngm_2_freq = v_ngm_books_2 %>%
+  filter(!bigram %in% stop_words$word) %>% 
+  group_by(book ,chapter) %>% 
+  mutate(total_words = n()) %>% 
+  ungroup() %>% 
+  group_by(book ,chapter, bigram) %>% 
+  mutate(freq = n()) %>% 
+  mutate(tf = freq/total_words) %>% 
+  summarise(freq = mean(freq), tf = mean(tf)) %>% 
+  ungroup() %>% 
+  group_by(book, chapter) %>% 
+  arrange(-freq) %>% 
+  mutate(rank = row_number())
+
+coefi = lm(log10(tf) ~ log10(rank), data = v_ngm_2_freq)
+ggplot(v_ngm_2_freq, aes(rank, tf, color = book)) + 
+  geom_abline(intercept = coefi$coefficients[1], slope = coefi$coefficients[2], color = "gray85", linetype = 2) +
+  geom_line(size = 1.1, alpha = 1) + 
+  ylab("Frequency") +
+  ggtitle("2-gram Distribution in Les Miserable") +
+  scale_x_log10() +
+  scale_y_log10()
+```
+<p dir='RTL'>
+جواب:
+<br>
+همانند سوال قبل برای کتاب بینوایان ویکتورهوگو نیز صورت گرفت که نتیجه قابل مشاهده است.
+از بقیه کتابهای این نویسنده صرف نظرشده است.
+این نمودار نیز مانند دو نمودار سوال قبل شباهتهایی را در این آثار نشان میدهد.
+</p>
+***
+
+<p dir='RTL'> 
+۱۰. بر اساس دادهایی که در تمرین ۸ و ۹ از آثار دو نویسنده به دست آوردید و با استفاده از  N-gram ها یک مدل لاجستیک برای تشخیص صاحب اثر بسازید. خطای مدل چقدر است؟ برای یادگیری مدل از کتاب کتاب الیور تویست اثر دیکنز و کتاب پیرمرد و دریا استفاده نکنید. پس از ساختن مدل برای تست کردن فصل های این کتابها را به عنوان داده ورودی به مدل بدهید. خطای تشخیص چقدر است؟
+</p>
+
+```{r, message = FALSE, comment = NA, warning = FALSE}
+v_train = v_ngm_1_freq %>% 
+  select(bigram, freq) %>% 
+  mutate(author = 0) %>% 
+  filter(freq > 30)
+
+d_train = d_ngm_1_freq %>% 
+  filter(book != 'Oliver Twist') %>% 
+  select(bigram, freq) %>% 
+  mutate(author = 1) %>% 
+  filter(freq > 30)
+
+train = bind_rows(d_train, v_train)
+
+lm = glm(author~bigram*freq,family = binomial(link = 'logit'), data = train)
+summary(lm)
+
+test = d_ngm_1_freq %>% 
+  filter(book == 'Bleak House') %>% 
+  select(bigram, freq) %>% 
+  filter(freq > 30)
+
+x = predict(lm, newdata = test, type = 'response')
+plot(x)
+
+test = v_ngm_1_freq %>% 
+  select(bigram, freq) %>% 
+  filter(freq > 30)
+
+x = predict(lm, newdata = test, type = 'response')
+plot(x)
+```
+
+<p dir='RTL'>
+جواب:
+<br>
+با استفاده از
+glm
+این دادهها برازش یافته که برروی دادههای در دسترس که باآنها برازش نیز شده نتیجهی مطلوبی به دست میدهد ولی مشکل اصلی همسان سازی دادهی جدید برای آزمایش است که باید هم تراز شود.
+</p>
